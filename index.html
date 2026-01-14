@@ -504,6 +504,11 @@
                 return;
             }
 
+            // Reset for new file upload
+            allLinks = [];
+            document.getElementById('copyAllLinksBtn').style.display = 'none';
+            document.getElementById('resultList').innerHTML = ''; // Clear previous results
+            
             showAlert('⏳ Memproses file...', 'success');
             const reader = new FileReader();
 
@@ -869,9 +874,15 @@
             // Store blob
             window[`blob_${filename}`] = blob;
             
+            // Initialize allLinks if not exists
+            if (!window.allLinks) {
+                window.allLinks = [];
+            }
+            
             // Store link info for later copying (will be populated when uploaded to Google Drive)
             if (!allLinks.find(l => l.filename === filename)) {
                 allLinks.push({ filename: filename, link: '' });
+                console.log(`✅ Added ${filename} to allLinks array. Total: ${allLinks.length}`);
             }
         }
 
@@ -907,9 +918,11 @@
         function updateStats() {
             document.getElementById('stats').style.display = 'grid';
             
-            // Reset links array untuk sesi baru
-            allLinks = [];
-            document.getElementById('copyAllLinksBtn').style.display = 'none';
+            // JANGAN reset allLinks di sini - sudah di-reset di handleFile()
+            // Initialize allLinks if needed
+            if (!window.allLinks) {
+                window.allLinks = [];
+            }
             
             const totalFiles = generatedPDFs.length;
             const totalSize = generatedPDFs.reduce((sum, pdf) => sum + parseFloat(pdf.size), 0);
@@ -1218,15 +1231,19 @@
         }
 
         function copyAllLinks() {
-            if (allLinks.length === 0) {
-                showAlert('❌ Tidak ada link untuk di-copy', 'error');
+            console.log('📋 copyAllLinks() called');
+            console.log('allLinks array:', allLinks);
+            console.log('allLinks length:', allLinks.length);
+            
+            if (!allLinks || allLinks.length === 0) {
+                showAlert('❌ Tidak ada link untuk di-copy.<br><br>Pastikan:<br>1. Sudah upload file Excel<br>2. Sudah upload semua PDF ke Google Drive<br>3. Tunggu semua file selesai ter-upload', 'error');
                 return;
             }
 
             // Check if all links have been generated
             const missingLinks = allLinks.filter(l => !l.link);
             if (missingLinks.length > 0) {
-                showAlert(`⚠️ ${missingLinks.length} file belum di-upload. Silakan upload semua file terlebih dahulu.`, 'warning');
+                showAlert(`⚠️ ${missingLinks.length} file belum di-upload ke Google Drive.<br><br>Upload selesai: ${allLinks.length - missingLinks.length}/${allLinks.length}<br><br>Tunggu semua file selesai ter-upload.`, 'warning');
                 return;
             }
 
