@@ -385,13 +385,19 @@
                         <button class="btn btn-download-all" id="downloadAllBtn" onclick="downloadAllPDFs()" style="display: none;">
                             📦 Download Semua
                         </button>
-                        <button class="btn btn-gdrive" id="uploadGdriveBtn" onclick="uploadAllToGoogleDrive()" style="display: none;">
-                            ☁️ Upload ke Google Drive
-                        </button>
                         <button class="btn btn-gdrive-auth" id="authGdriveBtn" onclick="authorizeGoogleDrive()" style="display: none;">
                             🔑 Autentikasi Google Drive
                         </button>
+                        <button class="btn btn-gdrive" id="selectFolderBtn" onclick="openFolderPicker()" style="display: none;">
+                            📁 Pilih Folder
+                        </button>
+                        <button class="btn btn-gdrive" id="uploadGdriveBtn" onclick="uploadAllToGoogleDrive()" style="display: none;" disabled>
+                            ☁️ Upload ke Folder
+                        </button>
                     </div>
+                </div>
+                <div id="selectedFolderInfo" style="display: none; margin-bottom: 15px; padding: 10px; background: #d4edda; border-radius: 5px; color: #155724;">
+                    <strong>Folder terpilih:</strong> <span id="selectedFolderName"></span>
                 </div>
                 <div id="resultList"></div>
             </div>
@@ -843,9 +849,11 @@
         function showGoogleDriveButtons() {
             if (!gdriveAuthToken) {
                 document.getElementById('authGdriveBtn').style.display = 'inline-block';
+                document.getElementById('selectFolderBtn').style.display = 'none';
                 document.getElementById('uploadGdriveBtn').style.display = 'none';
             } else {
                 document.getElementById('authGdriveBtn').style.display = 'none';
+                document.getElementById('selectFolderBtn').style.display = 'inline-block';
                 document.getElementById('uploadGdriveBtn').style.display = 'inline-block';
             }
         }
@@ -863,15 +871,6 @@
                             console.log('✅ Token received:', gdriveAuthToken.substring(0, 20) + '...');
                             showAlert('✅ Berhasil autentikasi Google Drive!', 'success');
                             showGoogleDriveButtons();
-                            
-                            // Create folder AFTER token is received
-                            console.log('📁 Creating folder...');
-                            createGoogleDriveFolderWithCallback(() => {
-                                console.log('✅ Folder ready for upload');
-                                showAlert('✅ Folder siap! Sekarang klik "Upload ke Google Drive"', 'success');
-                                // Enable upload button
-                                document.getElementById('uploadGdriveBtn').disabled = false;
-                            });
                         } else {
                             console.error('No access token in response:', response);
                             showAlert('❌ Gagal mendapatkan access token', 'error');
@@ -891,27 +890,18 @@
             }
         }
 
-        function createGoogleDriveFolderWithCallback(callback) {
+        function openFolderPicker() {
             if (!gdriveAuthToken) {
-                console.error('❌ No auth token for folder creation');
-                if (callback) callback();
+                showAlert('❌ Silakan autentikasi Google Drive terlebih dahulu', 'error');
                 return;
             }
-            
-            const folderName = 'Bukti_Transaksi_' + new Date().getTime();
-            
-            const metadata = {
-                name: folderName,
-                mimeType: 'application/vnd.google-apps.folder'
-            };
 
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-
-            fetch('https://www.googleapis.com/drive/v3/files?key=' + GOOGLE_API_KEY, {
-                method: 'POST',
-                headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken }),
-                body: form
+            console.log('📂 Opening folder picker...');
+            
+            // Fetch list of folders from Google Drive
+            fetch('https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.folder%27&spaces=drive&fields=files(id%2Cname%2CwebViewLink)&pageSize=100&key=' + GOOGLE_API_KEY, {
+                method: 'GET',
+                headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken })
             })
             .then(response => {
                 if (!response.ok) {
@@ -920,24 +910,99 @@
                 return response.json();
             })
             .then(data => {
-                if (data.id) {
-                    gdriveFolder = data.id;
-                    console.log('✅ Folder created successfully:', gdriveFolder);
-                    console.log('📁 Folder name:', folderName);
-                    
-                    // Call callback AFTER folder is created
-                    if (callback) {
-                        callback();
-                    }
-                } else if (data.error) {
-                    console.error('❌ Error creating folder:', data.error);
-                    showAlert('❌ Gagal membuat folder: ' + data.error.message, 'error');
+                if (data.files && data.files.length > 0) {
+                    console.log(`✅ Found ${data.files.length} folders`);
+                    showFolderSelectionDialog(data.files);
+                } else {
+                    showAlert('❌ Tidak ada folder ditemukan di Google Drive Anda', 'error');
+                    console.log('No folders found');
                 }
             })
             .catch(error => {
-                console.error('❌ Error creating folder:', error);
-                showAlert('❌ Error membuat folder: ' + error.message, 'error');
+                console.error('❌ Error fetching folders:', error);
+                showAlert('❌ Error: ' + error.message, 'error');
             });
+        }
+
+        function showFolderSelectionDialog(folders) {
+            // Create simple selection interface
+            let folderList = '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #ccc; border-radius: 5px;">';
+            
+            folders.forEach(folder => {
+                folderList += `
+                    <div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; hover: background: #f0f0f0;" 
+                         onclick="selectFolder('${folder.id}', '${folder.name}')">
+                        📁 ${folder.name}
+                    </div>
+                `;
+            });
+            
+            folderList += '</div>';
+            
+            // Show alert with folder list
+            const container = document.createElement('div');
+            container.innerHTML = folderList;
+            
+            // Simple approach: use prompt or create custom modal
+            // For now, use basic selection
+            const selectedFolder = confirm('Silakan pilih folder dari daftar di console:\n\n' + 
+                folders.map((f, i) => `${i + 1}. ${f.name}`).join('\n') + 
+                '\n\nKlik OK untuk membuka folder picker, atau Cancel untuk batal');
+            
+            if (selectedFolder) {
+                // Show simple dropdown
+                let foldersHtml = '<select id="folderSelect" onchange="selectFolderFromSelect()" style="width: 100%; padding: 8px; margin: 10px 0; border-radius: 5px; border: 1px solid #ccc;">';
+                foldersHtml += '<option value="">-- Pilih Folder --</option>';
+                folders.forEach(folder => {
+                    foldersHtml += `<option value="${folder.id}|${folder.name}">${folder.name}</option>`;
+                });
+                foldersHtml += '</select>';
+                
+                // Inject into result area
+                const dialog = document.createElement('div');
+                dialog.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10000; max-width: 400px; width: 90%;';
+                dialog.innerHTML = `
+                    <h3 style="margin-top: 0;">📂 Pilih Folder Google Drive</h3>
+                    ${foldersHtml}
+                    <button onclick="closefolderDialog()" style="margin-top: 10px; padding: 8px 16px; background: #ccc; border: none; border-radius: 5px; cursor: pointer;">Cancel</button>
+                `;
+                
+                document.body.appendChild(dialog);
+                
+                // Store dialog reference
+                window.folderDialogRef = dialog;
+            }
+        }
+
+        function selectFolderFromSelect() {
+            const select = document.getElementById('folderSelect');
+            const [folderId, folderName] = select.value.split('|');
+            
+            if (folderId) {
+                selectFolder(folderId, folderName);
+            }
+        }
+
+        function selectFolder(folderId, folderName) {
+            gdriveFolder = folderId;
+            console.log(`✅ Folder selected: ${folderName} (${folderId})`);
+            
+            // Update UI
+            document.getElementById('selectedFolderInfo').style.display = 'block';
+            document.getElementById('selectedFolderName').textContent = folderName;
+            document.getElementById('uploadGdriveBtn').disabled = false;
+            
+            showAlert(`✅ Folder "${folderName}" dipilih!`, 'success');
+            
+            // Close dialog if exists
+            closefolderDialog();
+        }
+
+        function closefolderDialog() {
+            if (window.folderDialogRef) {
+                window.folderDialogRef.remove();
+                window.folderDialogRef = null;
+            }
         }
 
         function uploadAllToGoogleDrive() {
@@ -948,7 +1013,7 @@
             }
 
             if (!gdriveFolder) {
-                showAlert('❌ Folder belum siap. Tunggu folder selesai dibuat.', 'error');
+                showAlert('❌ Silakan pilih folder terlebih dahulu', 'error');
                 return;
             }
 
@@ -958,9 +1023,9 @@
             }
 
             console.log('🚀 Starting upload to folder:', gdriveFolder);
-            showAlert(`⏳ Uploading ${generatedPDFs.length} file ke Google Drive...`, 'success');
+            showAlert(`⏳ Uploading ${generatedPDFs.length} file...`, 'success');
             
-            // Disable upload button during upload
+            // Disable button during upload
             document.getElementById('uploadGdriveBtn').disabled = true;
             
             let uploaded = 0;
@@ -972,7 +1037,7 @@
                         console.log(`📤 Upload progress: ${progress}% (${uploaded}/${generatedPDFs.length})`);
                         
                         if (uploaded === generatedPDFs.length) {
-                            showAlert(`✅ Semua ${generatedPDFs.length} file berhasil diupload ke Google Drive!`, 'success');
+                            showAlert(`✅ Semua ${generatedPDFs.length} file berhasil diupload!`, 'success');
                             console.log('✅ All files uploaded successfully!');
                             // Re-enable button
                             document.getElementById('uploadGdriveBtn').disabled = false;
@@ -991,16 +1056,11 @@
 
             const metadata = {
                 name: pdf.filename,
-                mimeType: 'application/pdf'
+                mimeType: 'application/pdf',
+                parents: [gdriveFolder]  // Upload to selected folder
             };
 
-            // WAJIB: Folder harus ada sebelum upload
-            if (gdriveFolder) {
-                metadata.parents = [gdriveFolder];
-                console.log(`📤 Uploading ${pdf.filename} to folder ${gdriveFolder}`);
-            } else {
-                console.warn(`⚠️ Warning: gdriveFolder not set, uploading to root`);
-            }
+            console.log(`📤 Uploading ${pdf.filename} to folder ${gdriveFolder}`);
 
             const form = new FormData();
             form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
