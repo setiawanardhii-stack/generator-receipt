@@ -355,6 +355,18 @@
                 </button>
             </div>
 
+            <!-- Google Sheet URL Input -->
+            <div style="margin-top: 20px; text-align: center; padding: 20px; background: #f8f9ff; border-radius: 15px; border: 1px solid #e0e0e0;">
+                <h3 style="color: #667eea; margin-bottom: 15px; font-size: 18px;">Atau Import dari Google Sheet</h3>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <input type="text" id="sheetUrlInput" placeholder="Tempel URL Google Sheet di sini..." style="flex: 1; min-width: 200px; max-width: 400px; padding: 12px 20px; border-radius: 30px; border: 1px solid #ccc; outline: none; font-size: 14px;">
+                    <button class="btn" onclick="processSheetUrl()" style="margin-top: 0; padding: 12px 30px; background: linear-gradient(135deg, #2196F3 0%, #0d47a1 100%);">
+                        📥 Proses Link
+                    </button>
+                </div>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">Pastikan Anda memiliki akses ke file tersebut.</p>
+            </div>
+
             <div class="alert" id="alert"></div>
 
             <div class="progress-container" id="progressContainer">
@@ -949,7 +961,7 @@
             }
         }
 
-        function authorizeGoogleDrive() {
+        function authorizeGoogleDrive(callback = null) {
             // Use Google Identity Services (GIS) - New OAuth 2.0 Standard
             try {
                 // Initialize Google Identity Services
@@ -962,6 +974,7 @@
                             console.log('✅ Token received:', gdriveAuthToken.substring(0, 20) + '...');
                             showAlert('✅ Berhasil autentikasi Google Drive!', 'success');
                             showGoogleDriveButtons();
+                            if (callback) callback();
                         } else {
                             console.error('No access token in response:', response);
                             showAlert('❌ Gagal mendapatkan access token', 'error');
@@ -979,6 +992,54 @@
                 console.error('Error initializing Google Identity Services:', error);
                 showAlert('❌ Error mengakses Google Drive API: ' + error.message, 'error');
             }
+        }
+
+        function processSheetUrl() {
+            const urlInput = document.getElementById('sheetUrlInput');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showAlert('❌ Masukkan URL Google Sheet terlebih dahulu', 'error');
+                return;
+            }
+
+            // Extract ID from URL
+            const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (!match || !match[1]) {
+                showAlert('❌ URL tidak valid. Pastikan link Google Sheet benar.', 'error');
+                return;
+            }
+            
+            const fileId = match[1];
+            console.log('Detected Sheet ID:', fileId);
+
+            if (!gdriveAuthToken) {
+                showAlert('⚠️ Memerlukan izin akses Google Drive. Silakan login di popup...', 'warning');
+                authorizeGoogleDrive(() => downloadSheetAsExcel(fileId));
+            } else {
+                downloadSheetAsExcel(fileId);
+            }
+        }
+
+        function downloadSheetAsExcel(fileId) {
+            showAlert('⏳ Mengunduh Google Sheet...', 'success');
+            
+            fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, {
+                method: 'GET',
+                headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.blob();
+            })
+            .then(blob => {
+                const file = new File([blob], "google_sheet_export.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                handleFile(file);
+            })
+            .catch(error => {
+                console.error('Download error:', error);
+                showAlert('❌ Gagal mengunduh Sheet: ' + error.message, 'error');
+            });
         }
 
         function openFolderPicker() {
