@@ -6,6 +6,7 @@
     <title>Generator Bukti Transaksi Otomatis</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://apis.google.com/js/api.js"></script>
     <style>
         * {
             margin: 0;
@@ -127,6 +128,24 @@
 
         .btn-download-all:hover {
             box-shadow: 0 10px 20px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn-gdrive {
+            background: linear-gradient(135deg, #4285f4 0%, #1a73e8 100%);
+            margin-left: 10px;
+        }
+
+        .btn-gdrive:hover {
+            box-shadow: 0 10px 20px rgba(66, 133, 244, 0.4);
+        }
+
+        .btn-gdrive-auth {
+            background: linear-gradient(135deg, #ea4335 0%, #c5221f 100%);
+            margin-left: 10px;
+        }
+
+        .btn-gdrive-auth:hover {
+            box-shadow: 0 10px 20px rgba(234, 67, 53, 0.4);
         }
 
         .progress-container {
@@ -361,9 +380,17 @@
             <div class="result-area" id="resultArea">
                 <div class="result-header">
                     <h3>📄 Hasil Generate</h3>
-                    <button class="btn btn-download-all" id="downloadAllBtn" onclick="downloadAllPDFs()" style="display: none;">
-                        📦 Download Semua
-                    </button>
+                    <div>
+                        <button class="btn btn-download-all" id="downloadAllBtn" onclick="downloadAllPDFs()" style="display: none;">
+                            📦 Download Semua
+                        </button>
+                        <button class="btn btn-gdrive" id="uploadGdriveBtn" onclick="uploadAllToGoogleDrive()" style="display: none;">
+                            ☁️ Upload ke Google Drive
+                        </button>
+                        <button class="btn btn-gdrive-auth" id="authGdriveBtn" onclick="authorizeGoogleDrive()" style="display: none;">
+                            🔑 Autentikasi Google Drive
+                        </button>
+                    </div>
                 </div>
                 <div id="resultList"></div>
             </div>
@@ -373,6 +400,14 @@
     <script>
         const { jsPDF } = window.jspdf;
         let generatedPDFs = [];
+
+        // ===== GOOGLE DRIVE API CONFIG =====
+        const GOOGLE_CLIENT_ID = '328487655564-uj36u18et9kig5s0iie0pb9da07jd91e.apps.googleusercontent.com';
+        const GOOGLE_API_KEY = 'AIzaSyBeTrp0l2sFR-H2cysGjbwj3aZU9JX8VbU';
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+        
+        let gdriveAuthToken = null;
+        let gdriveFolder = null;
 
         // Drag & Drop functionality
         const uploadArea = document.getElementById('uploadArea');
@@ -798,6 +833,146 @@
             document.getElementById('totalFiles').textContent = totalFiles;
             document.getElementById('totalSize').textContent = totalSize.toFixed(2) + ' KB';
             document.getElementById('avgSize').textContent = avgSize.toFixed(2) + ' KB';
+            
+            // Show Google Drive buttons
+            showGoogleDriveButtons();
+        }
+
+        // ===== GOOGLE DRIVE FUNCTIONS =====
+        function showGoogleDriveButtons() {
+            if (!gdriveAuthToken) {
+                document.getElementById('authGdriveBtn').style.display = 'inline-block';
+                document.getElementById('uploadGdriveBtn').style.display = 'none';
+            } else {
+                document.getElementById('authGdriveBtn').style.display = 'none';
+                document.getElementById('uploadGdriveBtn').style.display = 'inline-block';
+            }
+        }
+
+        function authorizeGoogleDrive() {
+            // Load Google API client library
+            gapi.load('client:auth2', () => {
+                gapi.client.init({
+                    clientId: GOOGLE_CLIENT_ID,
+                    scope: SCOPES,
+                    cookiePolicy: 'single_host_origin'
+                }).then(() => {
+                    const auth2 = gapi.auth2.getAuthInstance();
+                    
+                    if (!auth2.isSignedIn.get()) {
+                        auth2.signIn().then(googleUser => {
+                            gdriveAuthToken = googleUser.getAuthResponse().id_token;
+                            showAlert('✅ Berhasil autentikasi Google Drive!', 'success');
+                            showGoogleDriveButtons();
+                            createGoogleDriveFolder();
+                        }).catch(error => {
+                            console.error('Error signing in:', error);
+                            showAlert('❌ Gagal autentikasi: ' + error.error, 'error');
+                        });
+                    } else {
+                        gdriveAuthToken = auth2.currentUser.get().getAuthResponse().id_token;
+                        showAlert('✅ Sudah autentikasi Google Drive!', 'success');
+                        showGoogleDriveButtons();
+                        createGoogleDriveFolder();
+                    }
+                }).catch(error => {
+                    console.error('Error initializing:', error);
+                    showAlert('❌ Error mengakses Google Drive API', 'error');
+                });
+            });
+        }
+
+        function createGoogleDriveFolder() {
+            const folderName = 'Bukti_Transaksi_' + new Date().getTime();
+            
+            const metadata = {
+                name: folderName,
+                mimeType: 'application/vnd.google-apps.folder'
+            };
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+
+            fetch('https://www.googleapis.com/drive/v3/files?key=' + GOOGLE_API_KEY, {
+                method: 'POST',
+                headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken }),
+                body: form
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                    gdriveFolder = data.id;
+                    console.log('Folder created:', gdriveFolder);
+                    showAlert('✅ Folder Google Drive siap untuk upload', 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Error creating folder:', error);
+            });
+        }
+
+        function uploadAllToGoogleDrive() {
+            if (!gdriveAuthToken) {
+                showAlert('❌ Silakan autentikasi Google Drive terlebih dahulu', 'error');
+                authorizeGoogleDrive();
+                return;
+            }
+
+            if (generatedPDFs.length === 0) {
+                showAlert('❌ Tidak ada PDF untuk diupload', 'error');
+                return;
+            }
+
+            showAlert(`⏳ Uploading ${generatedPDFs.length} file ke Google Drive...`, 'success');
+            
+            let uploaded = 0;
+            generatedPDFs.forEach((pdf, index) => {
+                setTimeout(() => {
+                    uploadPDFToGoogleDrive(pdf, () => {
+                        uploaded++;
+                        const progress = Math.round((uploaded / generatedPDFs.length) * 100);
+                        
+                        if (uploaded === generatedPDFs.length) {
+                            showAlert(`✅ Semua file berhasil diupload ke Google Drive!`, 'success');
+                        }
+                    });
+                }, index * 500);
+            });
+        }
+
+        function uploadPDFToGoogleDrive(pdf, callback) {
+            const metadata = {
+                name: pdf.filename,
+                mimeType: 'application/pdf'
+            };
+
+            if (gdriveFolder) {
+                metadata.parents = [gdriveFolder];
+            }
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', pdf.blob);
+
+            fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&key=' + GOOGLE_API_KEY, {
+                method: 'POST',
+                headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken }),
+                body: form
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                    console.log('File uploaded:', pdf.filename, data.id);
+                    if (callback) callback();
+                } else {
+                    console.error('Upload failed:', data);
+                    showAlert('❌ Gagal upload ' + pdf.filename, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error uploading:', error);
+                showAlert('❌ Error upload: ' + error.message, 'error');
+            });
         }
     </script>
 </body>
