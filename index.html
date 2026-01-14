@@ -884,6 +884,11 @@
         }
 
         function createGoogleDriveFolder() {
+            if (!gdriveAuthToken) {
+                console.error('No auth token for folder creation');
+                return;
+            }
+            
             const folderName = 'Bukti_Transaksi_' + new Date().getTime();
             
             const metadata = {
@@ -899,16 +904,26 @@
                 headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken }),
                 body: form
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.id) {
                     gdriveFolder = data.id;
-                    console.log('Folder created:', gdriveFolder);
-                    showAlert('✅ Folder Google Drive siap untuk upload', 'success');
+                    console.log('✅ Folder created successfully:', gdriveFolder);
+                    console.log('Folder name:', folderName);
+                    showAlert('✅ Folder Google Drive "' + folderName + '" siap untuk upload!', 'success');
+                } else if (data.error) {
+                    console.error('❌ Error creating folder:', data.error);
+                    showAlert('❌ Gagal membuat folder: ' + data.error.message, 'error');
                 }
             })
             .catch(error => {
-                console.error('Error creating folder:', error);
+                console.error('❌ Error creating folder:', error);
+                showAlert('❌ Error membuat folder: ' + error.message, 'error');
             });
         }
 
@@ -924,6 +939,15 @@
                 return;
             }
 
+            // Check if folder is ready
+            if (!gdriveFolder) {
+                showAlert('⏳ Tunggu folder siap...', 'success');
+                // Wait 2 seconds then retry
+                setTimeout(() => uploadAllToGoogleDrive(), 2000);
+                return;
+            }
+
+            console.log('🚀 Starting upload to folder:', gdriveFolder);
             showAlert(`⏳ Uploading ${generatedPDFs.length} file ke Google Drive...`, 'success');
             
             let uploaded = 0;
@@ -932,9 +956,11 @@
                     uploadPDFToGoogleDrive(pdf, () => {
                         uploaded++;
                         const progress = Math.round((uploaded / generatedPDFs.length) * 100);
+                        console.log(`📤 Upload progress: ${progress}% (${uploaded}/${generatedPDFs.length})`);
                         
                         if (uploaded === generatedPDFs.length) {
-                            showAlert(`✅ Semua file berhasil diupload ke Google Drive!`, 'success');
+                            showAlert(`✅ Semua ${generatedPDFs.length} file berhasil diupload ke Google Drive!`, 'success');
+                            console.log('✅ All files uploaded successfully!');
                         }
                     });
                 }, index * 500);
@@ -942,13 +968,23 @@
         }
 
         function uploadPDFToGoogleDrive(pdf, callback) {
+            if (!gdriveAuthToken) {
+                console.error('No auth token for upload');
+                if (callback) callback();
+                return;
+            }
+
             const metadata = {
                 name: pdf.filename,
                 mimeType: 'application/pdf'
             };
 
+            // WAJIB: Folder harus ada sebelum upload
             if (gdriveFolder) {
                 metadata.parents = [gdriveFolder];
+                console.log(`📤 Uploading ${pdf.filename} to folder ${gdriveFolder}`);
+            } else {
+                console.warn(`⚠️ Warning: gdriveFolder not set, uploading to root`);
             }
 
             const form = new FormData();
@@ -960,18 +996,23 @@
                 headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken }),
                 body: form
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.id) {
-                    console.log('File uploaded:', pdf.filename, data.id);
+                    console.log(`✅ File uploaded: ${pdf.filename} (ID: ${data.id})`);
                     if (callback) callback();
-                } else {
-                    console.error('Upload failed:', data);
-                    showAlert('❌ Gagal upload ' + pdf.filename, 'error');
+                } else if (data.error) {
+                    console.error(`❌ Upload failed for ${pdf.filename}:`, data.error);
+                    showAlert('❌ Gagal upload ' + pdf.filename + ': ' + data.error.message, 'error');
                 }
             })
             .catch(error => {
-                console.error('Error uploading:', error);
+                console.error(`❌ Error uploading ${pdf.filename}:`, error);
                 showAlert('❌ Error upload: ' + error.message, 'error');
             });
         }
