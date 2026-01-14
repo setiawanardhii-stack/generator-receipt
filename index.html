@@ -1247,11 +1247,15 @@
                 return;
             }
 
-            // Format: NAMA_FILE = LINK
-            let copyText = allLinks.map(item => `${item.filename} = ${item.link}`).join('\n\n');
+            // Format: NAMA_FILE (tanpa .pdf) = LINK (ready untuk paste ke Google Sheet)
+            let copyText = allLinks.map(item => {
+                // Remove .pdf extension from filename
+                const nameWithoutExt = item.filename.replace(/\.pdf$/i, '');
+                return `${nameWithoutExt} = ${item.link}`;
+            }).join('\n');
             
             navigator.clipboard.writeText(copyText).then(() => {
-                showAlert(`✅ ${allLinks.length} link berhasil di-copy!<br><br>Format: NAMA_FILE = LINK`, 'success');
+                showAlert(`✅ ${allLinks.length} link berhasil di-copy!<br><br>Format: NAMA_FILE = LINK<br>(siap di-paste ke Google Sheet)`, 'success');
                 console.log('All links copied:', copyText);
             }).catch(err => {
                 showAlert('❌ Error saat copy: ' + err.message, 'error');
