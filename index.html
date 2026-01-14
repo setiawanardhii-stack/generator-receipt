@@ -363,6 +363,19 @@
                 </div>
             </div>
 
+            <!-- Sheet Selector -->
+            <div id="sheetSelector" style="display: none; margin-top: 20px; padding: 15px; background: #e7f3ff; border-radius: 10px; border-left: 4px solid #2196F3;">
+                <label for="sheetSelect" style="display: block; margin-bottom: 10px; font-weight: bold; color: #1976D2;">
+                    📊 Pilih Sheet:
+                </label>
+                <select id="sheetSelect" onchange="onSheetSelected()" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #2196F3; font-size: 14px;">
+                    <option value="">-- Pilih Sheet --</option>
+                </select>
+                <p style="margin-top: 10px; font-size: 12px; color: #555;">
+                    💡 File Excel Anda memiliki multiple sheets. Silakan pilih sheet yang ingin diproses.
+                </p>
+            </div>
+
             <div class="stats" id="stats" style="display: none;">
                 <div class="stat-card">
                     <div class="number" id="totalFiles">0</div>
@@ -494,7 +507,20 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    processExcel(workbook);
+                    
+                    // Store workbook globally untuk reference later
+                    window.currentWorkbook = workbook;
+                    
+                    // Check if multiple sheets
+                    if (workbook.SheetNames.length > 1) {
+                        console.log(`📊 Found ${workbook.SheetNames.length} sheets:`, workbook.SheetNames);
+                        showSheetSelector(workbook.SheetNames);
+                        showAlert(`📊 File memiliki ${workbook.SheetNames.length} sheets. Silakan pilih sheet yang ingin diproses.`, 'success');
+                    } else {
+                        // Single sheet - process directly
+                        console.log('Single sheet detected, processing directly');
+                        processExcel(workbook, 0);
+                    }
                 } catch (error) {
                     showAlert('❌ Error membaca file: ' + error.message, 'error');
                 }
@@ -503,11 +529,50 @@
             reader.readAsArrayBuffer(file);
         }
 
-        function processExcel(workbook) {
+        function showSheetSelector(sheetNames) {
+            const selector = document.getElementById('sheetSelector');
+            const sheetSelect = document.getElementById('sheetSelect');
+            
+            // Clear previous options
+            sheetSelect.innerHTML = '<option value="">-- Pilih Sheet --</option>';
+            
+            // Add options for each sheet
+            sheetNames.forEach((name, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `📄 ${name}`;
+                sheetSelect.appendChild(option);
+            });
+            
+            // Show selector
+            selector.style.display = 'block';
+        }
+
+        function onSheetSelected() {
+            const sheetSelect = document.getElementById('sheetSelect');
+            const selectedIndex = parseInt(sheetSelect.value);
+            
+            if (isNaN(selectedIndex) || selectedIndex < 0) {
+                return;
+            }
+            
+            console.log(`📊 User selected sheet index: ${selectedIndex} (${window.currentWorkbook.SheetNames[selectedIndex]})`);
+            
+            // Hide selector
+            document.getElementById('sheetSelector').style.display = 'none';
+            
+            // Process selected sheet
+            processExcel(window.currentWorkbook, selectedIndex);
+        }
+
+        function processExcel(workbook, sheetIndex = 0) {
             console.log('=== MULAI PROSES EXCEL ===');
             console.log('Sheet names:', workbook.SheetNames);
+            console.log('Processing sheet index:', sheetIndex);
             
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const sheetName = workbook.SheetNames[sheetIndex];
+            const firstSheet = workbook.Sheets[sheetName];
+            console.log(`Processing sheet: "${sheetName}"`);
             console.log('Sheet info:', firstSheet);
             
             // Coba baca dengan berbagai metode
