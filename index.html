@@ -440,7 +440,7 @@
         // ===== GOOGLE DRIVE API CONFIG =====
         const GOOGLE_CLIENT_ID = '328487655564-uj36u18et9kig5s0iie0pb9da07jd91e.apps.googleusercontent.com';
         const GOOGLE_API_KEY = 'AIzaSyBeTrp0l2sFR-H2cysGjbwj3aZU9JX8VbU';
-        const SCOPES = 'https://www.googleapis.com/auth/drive';  // Full scope untuk create folder + upload file
+        const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets.readonly';  // Scope untuk Drive dan Sheets API
         
         let gdriveAuthToken = null;
         let gdriveFolder = null;
@@ -997,7 +997,7 @@
         function processSheetUrl() {
             const urlInput = document.getElementById('sheetUrlInput');
             const url = urlInput.value.trim();
-            
+
             if (!url) {
                 showAlert('❌ Masukkan URL Google Sheet terlebih dahulu', 'error');
                 return;
@@ -1009,27 +1009,60 @@
                 showAlert('❌ URL tidak valid. Pastikan link Google Sheet benar.', 'error');
                 return;
             }
-            
+
             const fileId = match[1];
             console.log('Detected Sheet ID:', fileId);
 
             if (!gdriveAuthToken) {
-                showAlert('⚠️ Memerlukan izin akses Google Drive. Silakan login di popup...', 'warning');
+                showAlert('⚠️ Memerlukan izin akses Google Drive dan Google Sheets. Silakan login di popup...', 'warning');
                 authorizeGoogleDrive(() => downloadSheetAsExcel(fileId));
             } else {
                 downloadSheetAsExcel(fileId);
             }
         }
 
-        function downloadSheetAsExcel(fileId) {
-            showAlert('⏳ Mengunduh Google Sheet...', 'success');
-            
-            fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, {
+        function checkFileAccess(fileId) {
+            return fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,owners,permissions&key=${GOOGLE_API_KEY}`, {
                 method: 'GET',
                 headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken })
             })
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        throw new Error('403 - Akses ditolak. Pastikan file Google Sheet dibagikan dengan akun Google Anda dengan izin "Viewer" atau "Editor".');
+                    } else if (response.status === 404) {
+                        throw new Error('404 - File tidak ditemukan. Periksa kembali URL Google Sheet.');
+                    } else {
+                        throw new Error(`${response.status} - Error mengakses file`);
+                    }
+                }
+                return response.json();
+            });
+        }
+
+        function downloadSheetAsExcel(fileId) {
+            showAlert('⏳ Mengecek akses file...', 'success');
+
+            // First check if file is accessible
+            checkFileAccess(fileId)
+            .then(fileInfo => {
+                console.log('✅ File accessible:', fileInfo.name, 'Type:', fileInfo.mimeType);
+                showAlert('⏳ Mengunduh Google Sheet...', 'success');
+
+                // Now try to export
+                return fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, {
+                    method: 'GET',
+                    headers: new Headers({ 'Authorization': 'Bearer ' + gdriveAuthToken })
+                });
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        throw new Error('403 - Tidak dapat mengekspor file. Pastikan Anda memiliki izin "Editor" pada file Google Sheet ini.');
+                    } else {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                }
                 return response.blob();
             })
             .then(blob => {
@@ -1038,7 +1071,13 @@
             })
             .catch(error => {
                 console.error('Download error:', error);
-                showAlert('❌ Gagal mengunduh Sheet: ' + error.message, 'error');
+                let errorMessage = error.message;
+
+                if (error.message.includes('403')) {
+                    errorMessage += '\n\n🔧 Cara memperbaiki:\n1. Buka Google Sheet di browser\n2. Klik tombol "Bagikan" (kanan atas)\n3. Pastikan email akun Google Anda ditambahkan dengan izin "Editor"\n4. Atau bagikan secara publik dengan "Siapa saja dengan link dapat melihat"';
+                }
+
+                showAlert('❌ Gagal mengunduh Sheet: ' + errorMessage, 'error');
             });
         }
 
