@@ -398,6 +398,9 @@
                         <button class="btn btn-download-all" id="downloadAllBtn" onclick="downloadAllPDFs()" style="display: none;">
                             📦 Download Semua
                         </button>
+                        <button class="btn btn-download-all" id="copyAllLinksBtn" onclick="copyAllLinks()" style="display: none; background: #4caf50;">
+                            📋 Copy Semua Link
+                        </button>
                         <button class="btn btn-gdrive-auth" id="authGdriveBtn" onclick="authorizeGoogleDrive()" style="display: none;">
                             🔑 Autentikasi Google Drive
                         </button>
@@ -420,6 +423,7 @@
     <script>
         const { jsPDF } = window.jspdf;
         let generatedPDFs = [];
+        let allLinks = [];  // Store links in order
 
         // ===== GOOGLE DRIVE API CONFIG =====
         const GOOGLE_CLIENT_ID = '328487655564-uj36u18et9kig5s0iie0pb9da07jd91e.apps.googleusercontent.com';
@@ -864,6 +868,11 @@
 
             // Store blob
             window[`blob_${filename}`] = blob;
+            
+            // Store link info for later copying (will be populated when uploaded to Google Drive)
+            if (!allLinks.find(l => l.filename === filename)) {
+                allLinks.push({ filename: filename, link: '' });
+            }
         }
 
         function downloadPDF(filename) {
@@ -897,6 +906,10 @@
 
         function updateStats() {
             document.getElementById('stats').style.display = 'grid';
+            
+            // Reset links array untuk sesi baru
+            allLinks = [];
+            document.getElementById('copyAllLinksBtn').style.display = 'none';
             
             const totalFiles = generatedPDFs.length;
             const totalSize = generatedPDFs.reduce((sum, pdf) => sum + parseFloat(pdf.size), 0);
@@ -1145,6 +1158,23 @@
             .then(data => {
                 if (data.id) {
                     console.log(`✅ File uploaded: ${pdf.filename} (ID: ${data.id})`);
+                    
+                    // Generate shareable link
+                    const shareLink = `https://drive.google.com/file/d/${data.id}/view?usp=sharing`;
+                    console.log(`🔗 Shareable link: ${shareLink}`);
+                    
+                    // Update link in allLinks array
+                    const linkItem = allLinks.find(l => l.filename === pdf.filename);
+                    if (linkItem) {
+                        linkItem.link = shareLink;
+                    }
+                    
+                    // Add Copy Link button to result item
+                    addCopyLinkButton(pdf.filename, shareLink);
+                    
+                    // Show copy all links button when all files are uploaded
+                    document.getElementById('copyAllLinksBtn').style.display = 'inline-block';
+                    
                     if (callback) callback();
                 } else if (data.error) {
                     console.error(`❌ Upload failed for ${pdf.filename}:`, data.error);
@@ -1154,6 +1184,60 @@
             .catch(error => {
                 console.error(`❌ Error uploading ${pdf.filename}:`, error);
                 showAlert('❌ Error upload: ' + error.message, 'error');
+            });
+        }
+
+        function addCopyLinkButton(filename, shareLink) {
+            // Find result item and add copy link button
+            const resultList = document.getElementById('resultList');
+            const resultItems = resultList.getElementsByClassName('result-item');
+            
+            for (let item of resultItems) {
+                if (item.textContent.includes(filename)) {
+                    // Check if link button already exists
+                    if (!item.querySelector('.copy-link-btn')) {
+                        const linkBtn = document.createElement('button');
+                        linkBtn.className = 'download-btn copy-link-btn';
+                        linkBtn.style.background = '#4285f4';
+                        linkBtn.style.marginLeft = '10px';
+                        linkBtn.onclick = () => {
+                            navigator.clipboard.writeText(shareLink);
+                            showAlert('✅ Link copied to clipboard!', 'success');
+                        };
+                        linkBtn.innerHTML = '🔗 Copy Link';
+                        
+                        // Insert after download button
+                        const downloadBtn = item.querySelector('.download-btn:not(.copy-link-btn)');
+                        if (downloadBtn) {
+                            downloadBtn.parentElement.insertBefore(linkBtn, downloadBtn.nextSibling);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        function copyAllLinks() {
+            if (allLinks.length === 0) {
+                showAlert('❌ Tidak ada link untuk di-copy', 'error');
+                return;
+            }
+
+            // Check if all links have been generated
+            const missingLinks = allLinks.filter(l => !l.link);
+            if (missingLinks.length > 0) {
+                showAlert(`⚠️ ${missingLinks.length} file belum di-upload. Silakan upload semua file terlebih dahulu.`, 'warning');
+                return;
+            }
+
+            // Format: NAMA_FILE = LINK
+            let copyText = allLinks.map(item => `${item.filename} = ${item.link}`).join('\n\n');
+            
+            navigator.clipboard.writeText(copyText).then(() => {
+                showAlert(`✅ ${allLinks.length} link berhasil di-copy!<br><br>Format: NAMA_FILE = LINK`, 'success');
+                console.log('All links copied:', copyText);
+            }).catch(err => {
+                showAlert('❌ Error saat copy: ' + err.message, 'error');
             });
         }
     </script>
