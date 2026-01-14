@@ -1072,7 +1072,11 @@
             doc.setFontSize(10);
             doc.text('TERIMA KASIH', 50, y, { align: 'center' });
 
-            const filename = `Invoice_${parentRefnum}_${index + 1}.pdf`;
+            // FORMAT NAMA FILE SESUAI PERMINTAAN: EV_827_1<rrn>_1.pdf
+            // Contoh: EV_827_1kkdnbh04157_1.pdf
+            const rrnClean = rrn.replace(/'/g, '').trim();
+            const filename = `EV_827_1${rrnClean}_1.pdf`;
+            
             const pdfBlob = doc.output('blob');
             const pdfUrl = URL.createObjectURL(pdfBlob);
             
@@ -1117,18 +1121,13 @@
 
             showAlert('⏳ Menyiapkan semua file untuk diunduh...', 'success');
             
-            // Buat zip file jika banyak file
-            if (generatedPDFs.length > 1) {
-                // Fallback: download satu per satu
-                generatedPDFs.forEach((pdf, index) => {
-                    setTimeout(() => {
-                        downloadPDF(pdf.filename, index);
-                    }, index * 300);
-                });
-                showAlert(`✅ ${generatedPDFs.length} file sedang diunduh...`, 'success');
-            } else {
-                downloadPDF(generatedPDFs[0].filename, 0);
-            }
+            // Fallback: download satu per satu
+            generatedPDFs.forEach((pdf, index) => {
+                setTimeout(() => {
+                    downloadPDF(pdf.filename, index);
+                }, index * 300);
+            });
+            showAlert(`✅ ${generatedPDFs.length} file sedang diunduh...`, 'success');
         }
 
         function copyAllLinks() {
