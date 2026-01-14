@@ -863,7 +863,15 @@
                             console.log('✅ Token received:', gdriveAuthToken.substring(0, 20) + '...');
                             showAlert('✅ Berhasil autentikasi Google Drive!', 'success');
                             showGoogleDriveButtons();
-                            createGoogleDriveFolder();
+                            
+                            // Create folder AFTER token is received
+                            console.log('📁 Creating folder...');
+                            createGoogleDriveFolderWithCallback(() => {
+                                console.log('✅ Folder ready for upload');
+                                showAlert('✅ Folder siap! Sekarang klik "Upload ke Google Drive"', 'success');
+                                // Enable upload button
+                                document.getElementById('uploadGdriveBtn').disabled = false;
+                            });
                         } else {
                             console.error('No access token in response:', response);
                             showAlert('❌ Gagal mendapatkan access token', 'error');
@@ -883,9 +891,10 @@
             }
         }
 
-        function createGoogleDriveFolder() {
+        function createGoogleDriveFolderWithCallback(callback) {
             if (!gdriveAuthToken) {
-                console.error('No auth token for folder creation');
+                console.error('❌ No auth token for folder creation');
+                if (callback) callback();
                 return;
             }
             
@@ -914,8 +923,12 @@
                 if (data.id) {
                     gdriveFolder = data.id;
                     console.log('✅ Folder created successfully:', gdriveFolder);
-                    console.log('Folder name:', folderName);
-                    showAlert('✅ Folder Google Drive "' + folderName + '" siap untuk upload!', 'success');
+                    console.log('📁 Folder name:', folderName);
+                    
+                    // Call callback AFTER folder is created
+                    if (callback) {
+                        callback();
+                    }
                 } else if (data.error) {
                     console.error('❌ Error creating folder:', data.error);
                     showAlert('❌ Gagal membuat folder: ' + data.error.message, 'error');
@@ -934,21 +947,21 @@
                 return;
             }
 
+            if (!gdriveFolder) {
+                showAlert('❌ Folder belum siap. Tunggu folder selesai dibuat.', 'error');
+                return;
+            }
+
             if (generatedPDFs.length === 0) {
                 showAlert('❌ Tidak ada PDF untuk diupload', 'error');
                 return;
             }
 
-            // Check if folder is ready
-            if (!gdriveFolder) {
-                showAlert('⏳ Tunggu folder siap...', 'success');
-                // Wait 2 seconds then retry
-                setTimeout(() => uploadAllToGoogleDrive(), 2000);
-                return;
-            }
-
             console.log('🚀 Starting upload to folder:', gdriveFolder);
             showAlert(`⏳ Uploading ${generatedPDFs.length} file ke Google Drive...`, 'success');
+            
+            // Disable upload button during upload
+            document.getElementById('uploadGdriveBtn').disabled = true;
             
             let uploaded = 0;
             generatedPDFs.forEach((pdf, index) => {
@@ -961,6 +974,8 @@
                         if (uploaded === generatedPDFs.length) {
                             showAlert(`✅ Semua ${generatedPDFs.length} file berhasil diupload ke Google Drive!`, 'success');
                             console.log('✅ All files uploaded successfully!');
+                            // Re-enable button
+                            document.getElementById('uploadGdriveBtn').disabled = false;
                         }
                     });
                 }, index * 500);
