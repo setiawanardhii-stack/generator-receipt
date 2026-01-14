@@ -6,7 +6,8 @@
     <title>Generator Bukti Transaksi Otomatis</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"></script>
     <style>
         * {
             margin: 0;
@@ -850,36 +851,36 @@
         }
 
         function authorizeGoogleDrive() {
-            // Load Google API client library
-            gapi.load('client:auth2', () => {
-                gapi.client.init({
-                    clientId: GOOGLE_CLIENT_ID,
+            // Use Google Identity Services (GIS) - New OAuth 2.0 Standard
+            try {
+                // Initialize Google Identity Services
+                const tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: GOOGLE_CLIENT_ID,
                     scope: SCOPES,
-                    cookiePolicy: 'single_host_origin'
-                }).then(() => {
-                    const auth2 = gapi.auth2.getAuthInstance();
-                    
-                    if (!auth2.isSignedIn.get()) {
-                        auth2.signIn().then(googleUser => {
-                            gdriveAuthToken = googleUser.getAuthResponse().id_token;
+                    callback: (response) => {
+                        if (response && response.access_token) {
+                            gdriveAuthToken = response.access_token;
+                            console.log('✅ Token received:', gdriveAuthToken.substring(0, 20) + '...');
                             showAlert('✅ Berhasil autentikasi Google Drive!', 'success');
                             showGoogleDriveButtons();
                             createGoogleDriveFolder();
-                        }).catch(error => {
-                            console.error('Error signing in:', error);
-                            showAlert('❌ Gagal autentikasi: ' + error.error, 'error');
-                        });
-                    } else {
-                        gdriveAuthToken = auth2.currentUser.get().getAuthResponse().id_token;
-                        showAlert('✅ Sudah autentikasi Google Drive!', 'success');
-                        showGoogleDriveButtons();
-                        createGoogleDriveFolder();
+                        } else {
+                            console.error('No access token in response:', response);
+                            showAlert('❌ Gagal mendapatkan access token', 'error');
+                        }
+                    },
+                    error_callback: (error) => {
+                        console.error('OAuth error:', error);
+                        showAlert('❌ Error: ' + (error.error_description || error.error || 'Gagal autentikasi'), 'error');
                     }
-                }).catch(error => {
-                    console.error('Error initializing:', error);
-                    showAlert('❌ Error mengakses Google Drive API', 'error');
                 });
-            });
+                
+                // Request access token
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } catch (error) {
+                console.error('Error initializing Google Identity Services:', error);
+                showAlert('❌ Error mengakses Google Drive API: ' + error.message, 'error');
+            }
         }
 
         function createGoogleDriveFolder() {
