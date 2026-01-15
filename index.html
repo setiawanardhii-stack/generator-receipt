@@ -438,13 +438,22 @@
             <div class="gsheet-input-area">
                 <h3>Atau Import dari Google Sheet</h3>
                 <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                    <input type="text" id="sheetUrlInput" placeholder="Tempel URL Google Sheet di sini...">
+                    <input type="text" id="sheetUrlInput" placeholder="Masukkan ID Google Sheet...">
                     <button class="btn btn-sheet-process" onclick="processSheetUrl()" style="margin-top: 0; padding: 12px 30px;">
-                        📥 Proses Link
+                        📥 Proses Data
                     </button>
                 </div>
                 <p style="margin-top: 10px; font-size: 12px; color: #666;">
+<<<<<<< HEAD
                     Pastikan Google Sheet dibagikan dengan akses "Anyone with the link" atau akun Anda memiliki izin akses.
+=======
+                    💡 <strong>Cara mendapatkan ID:</strong><br>
+                    URL: https://docs.google.com/spreadsheets/d/<strong style="color: #e74c3c;">1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms</strong>/edit<br>
+                    ID: <strong style="color: #e74c3c;">1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms</strong>
+                </p>
+                <p style="margin-top: 5px; font-size: 12px; color: #666;">
+                    ⚠️ Pastikan Google Sheet dibagikan dengan akses <strong>"Anyone with the link"</strong>
+>>>>>>> 7f47d60 (update id sheet)
                 </p>
             </div>
 
@@ -519,6 +528,13 @@
         let generatedPDFs = [];
         let allLinks = [];
 
+<<<<<<< HEAD
+=======
+        // ============================
+        // KONFIGURASI - GANTI API KEY DI SINI
+        // ============================
+        const GOOGLE_API_KEY = 'YOUR_API_KEY_HERE'; // ⚠️ GANTI DENGAN API KEY ANDA
+>>>>>>> 7f47d60 (update id sheet)
         const GOOGLE_CLIENT_ID = '328487655564-uj36u18et9kig5s0iie0pb9da07jd91e.apps.googleusercontent.com';
         const GOOGLE_API_KEY = 'AIzaSyBeTrp0l2sFR-H2cysGjbwj3aZU9JX8VbU';
         const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets.readonly';
@@ -530,38 +546,55 @@
         // GOOGLE SHEETS INTEGRATION
         // ============================
 
+<<<<<<< HEAD
         // Fungsi untuk mengekstrak ID spreadsheet dari URL
         function extractSpreadsheetId(url) {
+=======
+        function extractSpreadsheetId(input) {
+            // Bersihkan input dari spasi
+            input = input.trim();
+            
+            // Jika input sudah berupa ID langsung (tidak ada slash atau special char)
+            if (input.match(/^[a-zA-Z0-9-_]+$/) && input.length > 20) {
+                return input;
+            }
+            
+            // Pattern untuk extract dari URL
+>>>>>>> 7f47d60 (update id sheet)
             const patterns = [
                 /\/d\/([a-zA-Z0-9-_]+)/,
                 /id=([a-zA-Z0-9-_]+)/,
-                /key=([a-zA-Z0-9-_]+)/
+                /key=([a-zA-Z0-9-_]+)/,
+                /spreadsheets\/d\/([a-zA-Z0-9-_]+)/
             ];
             
             for (const pattern of patterns) {
-                const match = url.match(pattern);
+                const match = input.match(pattern);
                 if (match && match[1]) {
                     return match[1];
                 }
             }
+            
             return null;
         }
 
         // Fungsi untuk mengambil dan memproses data dari Google Sheets
         async function processSheetUrl() {
-            const urlInput = document.getElementById('sheetUrlInput').value.trim();
+            const input = document.getElementById('sheetUrlInput').value.trim();
             
-            if (!urlInput) {
-                showAlert('❌ Masukkan URL Google Sheet terlebih dahulu', 'error');
+            if (!input) {
+                showAlert('❌ Masukkan ID atau URL Google Sheet terlebih dahulu', 'error');
                 return;
             }
             
-            const spreadsheetId = extractSpreadsheetId(urlInput);
+            const spreadsheetId = extractSpreadsheetId(input);
             
             if (!spreadsheetId) {
-                showAlert('❌ URL Google Sheet tidak valid', 'error');
+                showAlert('❌ ID Google Sheet tidak valid. Pastikan Anda memasukkan ID yang benar.', 'error');
                 return;
             }
+            
+            console.log('📊 Spreadsheet ID:', spreadsheetId);
             
             try {
                 // Reset UI
