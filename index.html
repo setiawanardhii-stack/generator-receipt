@@ -444,16 +444,12 @@
                     </button>
                 </div>
                 <p style="margin-top: 10px; font-size: 12px; color: #666;">
-<<<<<<< HEAD
-                    Pastikan Google Sheet dibagikan dengan akses "Anyone with the link" atau akun Anda memiliki izin akses.
-=======
                     💡 <strong>Cara mendapatkan ID:</strong><br>
                     URL: https://docs.google.com/spreadsheets/d/<strong style="color: #e74c3c;">1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms</strong>/edit<br>
                     ID: <strong style="color: #e74c3c;">1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms</strong>
                 </p>
                 <p style="margin-top: 5px; font-size: 12px; color: #666;">
                     ⚠️ Pastikan Google Sheet dibagikan dengan akses <strong>"Anyone with the link"</strong>
->>>>>>> 7f47d60 (update id sheet)
                 </p>
             </div>
 
@@ -528,15 +524,11 @@
         let generatedPDFs = [];
         let allLinks = [];
 
-<<<<<<< HEAD
-=======
         // ============================
         // KONFIGURASI - GANTI API KEY DI SINI
         // ============================
-        const GOOGLE_API_KEY = 'YOUR_API_KEY_HERE'; // ⚠️ GANTI DENGAN API KEY ANDA
->>>>>>> 7f47d60 (update id sheet)
+        const GOOGLE_API_KEY = 'AIzaSyA3_M9u_qVSdzfjGQz6qVV-yjIX8gny1eA'; // ⚠️ GANTI DENGAN API KEY ANDA
         const GOOGLE_CLIENT_ID = '328487655564-uj36u18et9kig5s0iie0pb9da07jd91e.apps.googleusercontent.com';
-        const GOOGLE_API_KEY = 'AIzaSyBeTrp0l2sFR-H2cysGjbwj3aZU9JX8VbU';
         const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets.readonly';
         
         let gdriveAuthToken = null;
@@ -546,10 +538,6 @@
         // GOOGLE SHEETS INTEGRATION
         // ============================
 
-<<<<<<< HEAD
-        // Fungsi untuk mengekstrak ID spreadsheet dari URL
-        function extractSpreadsheetId(url) {
-=======
         function extractSpreadsheetId(input) {
             // Bersihkan input dari spasi
             input = input.trim();
@@ -560,7 +548,6 @@
             }
             
             // Pattern untuk extract dari URL
->>>>>>> 7f47d60 (update id sheet)
             const patterns = [
                 /\/d\/([a-zA-Z0-9-_]+)/,
                 /id=([a-zA-Z0-9-_]+)/,
@@ -578,7 +565,6 @@
             return null;
         }
 
-        // Fungsi untuk mengambil dan memproses data dari Google Sheets
         async function processSheetUrl() {
             const input = document.getElementById('sheetUrlInput').value.trim();
             
@@ -597,64 +583,26 @@
             console.log('📊 Spreadsheet ID:', spreadsheetId);
             
             try {
-                // Reset UI
                 allLinks = [];
                 document.getElementById('copyAllLinksBtn').style.display = 'none';
                 document.getElementById('resultList').innerHTML = '';
                 
-                // Tampilkan loading
                 document.getElementById('loadingIndicator').classList.add('active');
                 showAlert('⏳ Mengambil data dari Google Sheets...', 'success');
                 
-                // Buat API URL untuk Google Sheets (format JSON)
-                const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true`;
+                const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true&key=${GOOGLE_API_KEY}`;
 
-                // Siapkan headers untuk request
-                const headers = {};
-                if (gdriveAuthToken) {
-                    // Gunakan auth token untuk akses private sheets (lebih cepat)
-                    headers['Authorization'] = `Bearer ${gdriveAuthToken}`;
-                } else {
-                    // Gunakan API key untuk public sheets
-                    const urlWithKey = `${apiUrl}&key=${GOOGLE_API_KEY}`;
-                    const response = await fetch(urlWithKey);
-                    // Handle response for public sheets
-                    if (!response.ok) {
-                        if (response.status === 403) {
-                            showAlert('❌ Akses ditolak. Pastikan Google Sheet dibagikan dengan "Anyone with the link" atau autentikasi terlebih dahulu', 'error');
-                            return;
-                        }
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    const spreadsheetData = await response.json();
-                    console.log('Google Sheets Data:', spreadsheetData);
-
-                    // Sembunyikan loading
-                    document.getElementById('loadingIndicator').classList.remove('active');
-
-                    // Konversi data Google Sheets ke format workbook XLSX
-                    const workbook = convertGoogleSheetsToWorkbook(spreadsheetData);
-
-                    // Simpan workbook untuk digunakan nanti
-                    window.currentWorkbook = workbook;
-
-                    // Tampilkan selector sheet jika ada multiple sheets
-                    if (workbook.SheetNames.length > 1) {
-                        showSheetSelector(workbook.SheetNames);
-                        showAlert(`📊 Ditemukan ${workbook.SheetNames.length} sheets. Silakan pilih sheet yang ingin diproses.`, 'success');
-                    } else {
-                        processExcel(workbook, 0);
-                    }
-
-                    return; // Exit early for public sheets
-                }
-
-                // Fetch data dari Google Sheets API dengan auth token (untuk private sheets)
-                const response = await fetch(apiUrl, { headers });
+                const response = await fetch(apiUrl);
                 
                 if (!response.ok) {
                     if (response.status === 403) {
-                        showAlert('❌ Akses ditolak. Pastikan Google Sheet dibagikan dengan "Anyone with the link" atau autentikasi terlebih dahulu', 'error');
+                        showAlert('❌ Akses ditolak. Pastikan Google Sheet dibagikan dengan "Anyone with the link"', 'error');
+                        document.getElementById('loadingIndicator').classList.remove('active');
+                        return;
+                    }
+                    if (response.status === 400) {
+                        showAlert('❌ API Key tidak valid. Harap ganti API Key di dalam kode!', 'error');
+                        document.getElementById('loadingIndicator').classList.remove('active');
                         return;
                     }
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -663,16 +611,11 @@
                 const spreadsheetData = await response.json();
                 console.log('Google Sheets Data:', spreadsheetData);
                 
-                // Sembunyikan loading
                 document.getElementById('loadingIndicator').classList.remove('active');
                 
-                // Konversi data Google Sheets ke format workbook XLSX
                 const workbook = convertGoogleSheetsToWorkbook(spreadsheetData);
-                
-                // Simpan workbook untuk digunakan nanti
                 window.currentWorkbook = workbook;
                 
-                // Tampilkan selector sheet jika ada multiple sheets
                 if (workbook.SheetNames.length > 1) {
                     showSheetSelector(workbook.SheetNames);
                     showAlert(`📊 Ditemukan ${workbook.SheetNames.length} sheets. Silakan pilih sheet yang ingin diproses.`, 'success');
@@ -687,31 +630,27 @@
             }
         }
 
-        // Fungsi untuk mengonversi data Google Sheets ke format workbook XLSX
         function convertGoogleSheetsToWorkbook(spreadsheetData) {
             const workbook = {
                 SheetNames: [],
                 Sheets: {}
             };
             
-            // Proses setiap sheet
-            spreadsheetData.sheets.forEach((sheet, sheetIndex) => {
+            spreadsheetData.sheets.forEach((sheet) => {
                 const sheetTitle = sheet.properties.title;
                 workbook.SheetNames.push(sheetTitle);
                 
-                // Ambil data grid dari sheet
                 const gridData = sheet.data || [];
                 const rowData = [];
                 
                 if (gridData.length > 0 && gridData[0].rowData) {
-                    gridData[0].rowData.forEach((row, rowIndex) => {
+                    gridData[0].rowData.forEach((row) => {
                         const cellArray = [];
                         
                         if (row.values) {
-                            row.values.forEach((cell, colIndex) => {
+                            row.values.forEach((cell) => {
                                 let cellValue = '';
                                 
-                                // Handle berbagai tipe data Google Sheets
                                 if (cell.effectiveValue) {
                                     const valueType = Object.keys(cell.effectiveValue)[0];
                                     
@@ -720,15 +659,11 @@
                                             cellValue = cell.effectiveValue.stringValue || '';
                                             break;
                                         case 'numberValue':
-                                            // Untuk tanggal, Google Sheets menyimpan sebagai serial number
-                                            // Sama seperti Excel (days since 1899-12-30)
                                             if (cell.effectiveFormat?.numberFormat?.type === 'DATE' || 
                                                 cell.effectiveFormat?.numberFormat?.type === 'DATE_TIME' ||
                                                 cell.effectiveFormat?.numberFormat?.pattern?.includes('d') || 
                                                 cell.effectiveFormat?.numberFormat?.pattern?.includes('m') ||
                                                 cell.effectiveFormat?.numberFormat?.pattern?.includes('y')) {
-                                                // Konversi serial number Google Sheets ke serial number Excel
-                                                // Google Sheets: days since 1899-12-30 (1 hari perbedaan dengan Excel)
                                                 const googleSheetsDate = cell.effectiveValue.numberValue;
                                                 const excelSerial = googleSheetsDate + 1;
                                                 cellValue = excelSerial;
@@ -740,7 +675,6 @@
                                             cellValue = cell.effectiveValue.boolValue ? 'TRUE' : 'FALSE';
                                             break;
                                         case 'formulaValue':
-                                            // Untuk formula, ambil nilai yang sudah terhitung jika ada
                                             cellValue = cell.formattedValue || '';
                                             break;
                                         default:
@@ -754,7 +688,6 @@
                             });
                         }
                         
-                        // Pastikan setiap baris memiliki minimal 8 kolom untuk kompatibilitas
                         while (cellArray.length < 8) {
                             cellArray.push('');
                         }
@@ -763,20 +696,16 @@
                     });
                 }
                 
-                // Konversi array data ke format sheet XLSX
                 const worksheet = {};
                 
-                // Tambahkan setiap cell
                 rowData.forEach((row, r) => {
                     row.forEach((cell, c) => {
                         const cellAddress = XLSX.utils.encode_cell({r: r, c: c});
                         
-                        // Tentukan tipe data
                         let cellObject = { v: cell };
                         
                         if (typeof cell === 'number') {
                             cellObject.t = 'n';
-                            // Jika ini kemungkinan tanggal (serial number)
                             if (cell > 0 && cell < 50000) {
                                 cellObject.t = 'd';
                                 cellObject.z = 'dd-mm-yyyy';
@@ -791,7 +720,6 @@
                     });
                 });
                 
-                // Tambahkan range
                 if (rowData.length > 0) {
                     const range = XLSX.utils.decode_range("A1:H" + (rowData.length || 1));
                     worksheet['!ref'] = XLSX.utils.encode_range(range);
@@ -806,7 +734,6 @@
             return workbook;
         }
 
-        // Tambahkan event listener untuk input Google Sheets URL (Enter key)
         document.getElementById('sheetUrlInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 processSheetUrl();
@@ -953,7 +880,6 @@
             console.log('Sheet names:', workbook.SheetNames);
             console.log('Processing sheet index:', sheetIndex);
             
-            // Reset UI state
             document.getElementById('sheetSelector').style.display = 'none';
             document.getElementById('loadingIndicator').classList.remove('active');
             
@@ -1145,8 +1071,6 @@
             doc.setFontSize(10);
             doc.text('TERIMA KASIH', 50, y, { align: 'center' });
 
-            // FORMAT NAMA FILE SESUAI PERMINTAAN: EV_827_1<rrn>_1.pdf
-            // Contoh: EV_827_1kkdnbh04157_1.pdf
             const rrnClean = rrn.replace(/'/g, '').trim();
             const filename = `EV_827_1${rrnClean}_1.pdf`;
             
@@ -1160,7 +1084,6 @@
                 size: (pdfBlob.size / 1024).toFixed(2)
             });
 
-            // Tambahkan ke hasil
             const resultList = document.getElementById('resultList');
             const resultItem = document.createElement('div');
             resultItem.className = 'result-item';
@@ -1194,7 +1117,6 @@
 
             showAlert('⏳ Menyiapkan semua file untuk diunduh...', 'success');
             
-            // Fallback: download satu per satu
             generatedPDFs.forEach((pdf, index) => {
                 setTimeout(() => {
                     downloadPDF(pdf.filename, index);
@@ -1266,7 +1188,6 @@
 
             showAlert('⏳ Membuka pemilih folder...', 'success');
             
-            // Simulasi folder picker sederhana
             const folderName = prompt('Masukkan nama folder untuk menyimpan PDF:', 'Receipts_' + new Date().toISOString().split('T')[0]);
             
             if (folderName) {
@@ -1353,7 +1274,6 @@
             showAlert(`✅ ${uploadedCount}/${totalFiles} file berhasil diupload ke Google Drive!`, 'success');
         }
 
-        // Initialize
         console.log('Receipt Generator initialized');
     </script>
 </body>
