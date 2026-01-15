@@ -1,210 +1,1735 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Generator Receipt</title>
-
-<!-- LIBRARY -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-
-<style>
-body{font-family:Arial;background:#f2f4ff;padding:20px}
-.container{max-width:1000px;margin:auto;background:#fff;padding:20px;border-radius:12px}
-input,button{padding:10px;border-radius:6px}
-button{cursor:pointer}
-#resultList div{margin:10px 0;padding:10px;border:1px solid #ddd;border-radius:8px}
-.progress{height:25px;background:#eee;border-radius:20px;overflow:hidden}
-.progress span{display:block;height:100%;background:#1a237e;color:#fff;text-align:center}
-</style>
-</head>
-
-<body>
-<div class="container">
-<h2>🧾 Generator Receipt (Google Sheet FIX)</h2>
-
-<hr>
-
-<h3>📁 Upload Excel</h3>
-<input type="file" id="fileInput" accept=".xls,.xlsx">
-
-<hr>
-
-<h3>📊 Import Google Sheet</h3>
-<input type="text" id="sheetUrl" placeholder="Paste URL / ID Google Sheet" style="width:60%">
-<button onclick="processSheetUrl()">Proses</button>
-
-<hr>
-
-<div id="sheetSelector" style="display:none">
-<select id="sheetSelect" onchange="onSheetSelected()"></select>
-</div>
-
-<hr>
-
-<div class="progress" style="display:none" id="progressBox">
-<span id="progressFill">0%</span>
-</div>
-
-<div id="resultList"></div>
-</div>
-
-<script>
-const { jsPDF } = window.jspdf;
-
-/* ==============================
-   GOOGLE CONFIG
-================================ */
-const GOOGLE_CLIENT_ID = "ISI_CLIENT_ID_ANDA";
-const SCOPES = "https://www.googleapis.com/auth/spreadsheets.readonly";
-
-let gToken = null;
-let generatedPDFs = [];
-let currentWorkbook = null;
-let gSheetId = null;
-let gSheetNames = [];
-
-/* ==============================
-   GOOGLE AUTH
-================================ */
-function authGoogle(){
-    const client = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: SCOPES,
-        callback:(res)=>{
-            gToken = res.access_token;
-            alert("Login Google berhasil");
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Bukti Transaksi Otomatis</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-    });
-    client.requestAccessToken();
-}
 
-window.onload = authGoogle;
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a237e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
 
-/* ==============================
-   UTIL
-================================ */
-function extractSpreadsheetId(url){
-    const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    return m ? m[1] : url;
-}
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 1000px;
+            width: 100%;
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
 
-function formatRupiah(v){
-    return "Rp " + Number(v).toLocaleString("id-ID");
-}
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
 
-function formatExcelDate(v){
-    if(typeof v==="number"){
-        const d=new Date((v-25569)*86400*1000);
-        return d.toLocaleDateString("id-ID");
-    }
-    return v;
-}
+        .header {
+            background: linear-gradient(135deg, #000000 0%, #1a237e 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
 
-/* ==============================
-   GOOGLE SHEET PROCESS
-================================ */
-async function processSheetUrl(){
-    if(!gToken){ alert("Login Google dulu"); return; }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.05)"/></svg>');
+            background-size: cover;
+        }
 
-    gSheetId = extractSpreadsheetId(sheetUrl.value);
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
 
-    const meta = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${gSheetId}`,
-        {headers:{Authorization:`Bearer ${gToken}`}}
-    ).then(r=>r.json());
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.5;
+            position: relative;
+            z-index: 1;
+        }
 
-    gSheetNames = meta.sheets.map(s=>s.properties.title);
+        .content {
+            padding: 40px;
+        }
 
-    const sel = document.getElementById("sheetSelect");
-    sel.innerHTML="";
-    gSheetNames.forEach((n,i)=>{
-        sel.innerHTML+=`<option value="${i}">${n}</option>`;
-    });
-    document.getElementById("sheetSelector").style.display="block";
-}
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
 
-async function onSheetSelected(){
-    const name = gSheetNames[sheetSelect.value];
-    const res = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${gSheetId}/values/${encodeURIComponent(name)}`,
-        {headers:{Authorization:`Bearer ${gToken}`}}
-    ).then(r=>r.json());
+        @media (max-width: 768px) {
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+        }
 
-    const sheet = XLSX.utils.aoa_to_sheet(res.values);
-    currentWorkbook = {SheetNames:[name],Sheets:{[name]:sheet}};
-    processExcel(currentWorkbook);
-}
+        .upload-area {
+            border: 3px dashed #636364;
+            border-radius: 15px;
+            padding: 40px 30px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 250px;
+        }
 
-/* ==============================
-   EXCEL UPLOAD
-================================ */
-fileInput.onchange=e=>{
-    const r=new FileReader();
-    r.onload=ev=>{
-        const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
-        currentWorkbook=wb;
-        processExcel(wb);
-    };
-    r.readAsArrayBuffer(e.target.files[0]);
-};
+        .upload-area:hover {
+            border-color: #1a237e;
+            background: #f0f2ff;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(26, 35, 126, 0.1);
+        }
 
-/* ==============================
-   PROCESS DATA
-================================ */
-function processExcel(workbook){
-    generatedPDFs=[];
-    resultList.innerHTML="";
-    progressBox.style.display="block";
+        .upload-area.dragover {
+            border-color: #1a237e;
+            background: #e8ebff;
+        }
 
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet,{header:1,defval:""}).slice(1);
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            color: #1a237e;
+        }
 
-    rows.forEach((r,i)=>{
-        setTimeout(()=>{
-            generatePDF({
-                date:r[1],
-                merchant:r[4],
-                rrn:r[5],
-                ref:r[6],
-                amount:r[7]
-            },i,rows.length);
-        },i*150);
-    });
-}
+        .upload-area h3 {
+            color: #1a237e;
+            margin-bottom: 10px;
+            font-size: 22px;
+            font-weight: 600;
+        }
 
-/* ==============================
-   PDF GENERATOR
-================================ */
-function generatePDF(d,i,total){
-    const doc=new jsPDF({unit:"mm",format:[100,125]});
+        .upload-area p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
 
-    doc.text("INVOICE",50,10,{align:"center"});
-    doc.text("Merchant : "+d.merchant,5,25);
-    doc.text("RRN      : "+d.rrn,5,32);
-    doc.text("Ref      : "+d.ref,5,39);
-    doc.text("Amount   : "+formatRupiah(d.amount),5,46);
-    doc.text("Date     : "+formatExcelDate(d.date),5,53);
+        input[type="file"] {
+            display: none;
+        }
 
-    const blob=doc.output("blob");
-    const url=URL.createObjectURL(blob);
-    const name=`EV_${d.rrn||i}.pdf`;
+        .btn {
+            background: linear-gradient(135deg, #1a237e 0%, #000000 100%);
+            color: white;
+            border: none;
+            padding: 14px 35px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
 
-    generatedPDFs.push({name,url});
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(26, 35, 126, 0.4);
+        }
 
-    resultList.innerHTML+=`
-      <div>
-        <b>${name}</b><br>
-        <a href="${url}" download="${name}">Download</a>
-      </div>
-    `;
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
 
-    const p=Math.round(((i+1)/total)*100);
-    progressFill.style.width=p+"%";
-    progressFill.textContent=p+"%";
-}
-</script>
+        .btn-download-all {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        }
+
+        .btn-download-all:hover {
+            box-shadow: 0 10px 20px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn-gdrive {
+            background: linear-gradient(135deg, #4285f4 0%, #1a73e8 100%);
+        }
+
+        .btn-gdrive:hover {
+            box-shadow: 0 10px 20px rgba(66, 133, 244, 0.4);
+        }
+
+        .btn-gdrive-auth {
+            background: linear-gradient(135deg, #ea4335 0%, #c5221f 100%);
+        }
+
+        .btn-gdrive-auth:hover {
+            box-shadow: 0 10px 20px rgba(234, 67, 53, 0.4);
+        }
+
+        .progress-container {
+            margin: 30px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1a237e 0%, #3949ab 100%);
+            width: 0%;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .result-area {
+            margin-top: 40px;
+            display: none;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .result-header h3 {
+            color: #1a237e;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .result-list {
+            display: grid;
+            gap: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .result-item {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 5px solid #1a237e;
+            transition: all 0.3s;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .result-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(26, 35, 126, 0.1);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-item .info {
+            flex: 1;
+        }
+
+        .result-item .filename {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 16px;
+            word-break: break-all;
+        }
+
+        .result-item .size {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .result-item .download-btn {
+            background: #1a237e;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .result-item .download-btn:hover {
+            background: #3949ab;
+            transform: scale(1.05);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #000105 0%, #1a237e 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card .number {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .label {
+            font-size: 15px;
+            opacity: 0.9;
+        }
+
+        .alert {
+            padding: 18px 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+            display: none;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+
+        .alert.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeaa7;
+        }
+
+        .alert.active {
+            display: block;
+        }
+
+        .gsheet-input-area {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9ff;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .gsheet-input-area h3 {
+            color: #1a237e;
+            margin-bottom: 20px;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .input-group input {
+            flex: 1;
+            min-width: 250px;
+            max-width: 400px;
+            padding: 15px 25px;
+            border-radius: 30px;
+            border: 2px solid #ddd;
+            outline: none;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .input-group input:focus {
+            border-color: #1a237e;
+            box-shadow: 0 0 0 3px rgba(26, 35, 126, 0.1);
+        }
+
+        .help-text {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            text-align: left;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #1a237e;
+        }
+
+        .help-text strong {
+            color: #1a237e;
+        }
+
+        .sheet-selector {
+            display: none;
+            margin: 25px 0;
+            padding: 25px;
+            background: #e7f3ff;
+            border-radius: 15px;
+            border-left: 5px solid #2196F3;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .sheet-selector label {
+            display: block;
+            margin-bottom: 15px;
+            font-weight: 600;
+            color: #1976D2;
+            font-size: 18px;
+        }
+
+        .sheet-selector select {
+            width: 100%;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #2196F3;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .sheet-selector select:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+
+        .selected-folder-info {
+            display: none;
+            margin-bottom: 25px;
+            padding: 18px 25px;
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border-radius: 12px;
+            color: #155724;
+            border: 2px solid #b8dfc1;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .selected-folder-info strong {
+            color: #1a237e;
+        }
+
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            margin: 30px 0;
+            padding: 40px;
+            background: #f8f9ff;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .loading-indicator.active {
+            display: block;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1a237e;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 25px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a237e;
+            margin-bottom: 10px;
+        }
+
+        .watermark {
+            position: fixed;
+            bottom: 15px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            pointer-events: none;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            width: calc(100% - 40px);
+            left: 20px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(26, 35, 126, 0.1);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin: 5px;
+        }
+
+        .badge.success {
+            background: rgba(39, 174, 96, 0.1);
+            color: #27ae60;
+        }
+
+        .badge.warning {
+            background: rgba(241, 196, 15, 0.1);
+            color: #f1c40f;
+        }
+
+        .badge.error {
+            background: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+        }
+
+        .btn-sheet-process {
+            background: linear-gradient(135deg, #2196F3 0%, #0d47a1 100%);
+            margin: 0;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: #1a237e;
+            margin-bottom: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 5px;
+            height: 20px;
+            background: #1a237e;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧾 Generator Receipt</h1>
+            <p>Import file Excel atau Google Sheet dan dapatkan PDF bukti transaksi secara otomatis</p>
+        </div>
+
+        <div class="content">
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <!-- Upload Local File -->
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <h3>Upload File Excel</h3>
+                    <p>Klik atau drag & drop file .xls atau .xlsx di sini</p>
+                    <input type="file" id="fileInput" accept=".xls,.xlsx">
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        📂 Pilih File
+                    </button>
+                    <p class="badge" style="margin-top: 15px;">Mendukung .xls & .xlsx</p>
+                </div>
+
+                <!-- Import from Google Sheets -->
+                <div class="gsheet-input-area">
+                    <h3>Import dari Google Sheets</h3>
+                    <div class="input-group">
+                        <input type="text" id="sheetUrlInput" placeholder="Masukkan URL atau ID Google Sheet...">
+                        <button class="btn btn-sheet-process" onclick="processSheetUrl()">
+                            📥 Proses Data
+                        </button>
+                    </div>
+                    <div class="help-text">
+                        <p><strong>💡 Cara mendapatkan URL:</strong></p>
+                        <p>1. Buka Google Sheet yang ingin diproses</p>
+                        <p>2. Klik tombol "Share" di kanan atas</p>
+                        <p>3. Pilih "Anyone with the link can view"</p>
+                        <p>4. Copy link yang diberikan</p>
+                        <p class="badge warning" style="margin-top: 10px;">⚠️ Pastikan Google Sheet sudah di-share</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alert Messages -->
+            <div class="alert" id="alert"></div>
+
+            <!-- Loading Indicator -->
+            <div class="loading-indicator" id="loadingIndicator">
+                <div class="spinner"></div>
+                <p style="font-size: 16px; color: #1a237e; margin-top: 20px; font-weight: 600;">Mengambil data dari Google Sheets...</p>
+                <p style="color: #666; margin-top: 10px;">Harap tunggu sebentar</p>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-container" id="progressContainer">
+                <div class="section-title">Progress Generate</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
+            </div>
+
+            <!-- Sheet Selector -->
+            <div class="sheet-selector" id="sheetSelector">
+                <label for="sheetSelect">📊 Pilih Sheet yang ingin diproses:</label>
+                <select id="sheetSelect" onchange="onSheetSelected()">
+                    <option value="">-- Pilih Sheet --</option>
+                </select>
+                <p style="margin-top: 15px; font-size: 14px; color: #555; line-height: 1.5;">
+                    💡 File ini memiliki beberapa sheets. Silakan pilih sheet yang berisi data transaksi.
+                </p>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats" id="stats" style="display: none;">
+                <div class="stat-card">
+                    <div class="number" id="totalFiles">0</div>
+                    <div class="label">Total File</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="totalSize">0 KB</div>
+                    <div class="label">Total Size</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="avgSize">0 KB</div>
+                    <div class="label">Rata-rata Size</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="successRate">100%</div>
+                    <div class="label">Success Rate</div>
+                </div>
+            </div>
+
+            <!-- Result Area -->
+            <div class="result-area" id="resultArea">
+                <div class="result-header">
+                    <h3>📄 Hasil Generate PDF</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-download-all" id="downloadAllBtn" onclick="downloadAllPDFs()" style="display: none;">
+                            📦 Download Semua
+                        </button>
+                        <button class="btn btn-download-all" id="copyAllLinksBtn" onclick="copyAllLinks()" style="display: none;">
+                            📋 Copy Link
+                        </button>
+                        <button class="btn btn-gdrive-auth" id="authGdriveBtn" onclick="authorizeGoogleDrive()">
+                            🔑 Login Google
+                        </button>
+                        <button class="btn btn-gdrive" id="selectFolderBtn" onclick="openFolderPicker()" style="display: none;">
+                            📁 Buat Folder
+                        </button>
+                        <button class="btn btn-gdrive" id="uploadGdriveBtn" onclick="uploadAllToGoogleDrive()" style="display: none;" disabled>
+                            ☁️ Upload ke Drive
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="selected-folder-info" id="selectedFolderInfo">
+                    <strong>📁 Folder terpilih:</strong> <span id="selectedFolderName"></span>
+                    <span style="float: right;">✅ Siap untuk upload</span>
+                </div>
+                
+                <div class="result-list" id="resultList"></div>
+                
+                <div class="footer">
+                    <div class="logo">📊 Generator Receipt System</div>
+                    <p>© 2024 All Rights Reserved • Created by Sagara-Sync</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="watermark">
+        <span>© 2024 Generator System By Sagara-Sync</span>
+        <span>All Rights Reserved</span>
+    </div>
+
+    <script>
+        // ============================
+        // INISIALISASI VARIABEL
+        // ============================
+        const { jsPDF } = window.jspdf;
+        let generatedPDFs = [];
+        let allLinks = [];
+        
+        // Konfigurasi OAuth2
+        const GOOGLE_CLIENT_ID = '328487655564-uj36u18et9kig5s0iie0pb9da07jd91e.apps.googleusercontent.com';
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets.readonly';
+        
+        let gdriveAuthToken = null;
+        let gdriveFolder = null;
+        
+        // Referensi elemen DOM
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const sheetUrlInput = document.getElementById('sheetUrlInput');
+        
+        // ============================
+        // FUNGSI UTILITAS
+        // ============================
+        
+        function showAlert(message, type = 'success') {
+            const alert = document.getElementById('alert');
+            alert.innerHTML = message;
+            alert.className = `alert ${type} active`;
+            setTimeout(() => {
+                alert.classList.remove('active');
+            }, 5000);
+        }
+        
+        function formatRupiah(angka) {
+            if (isNaN(angka) || angka === null || angka === undefined || angka === '') {
+                return 'Rp 0';
+            }
+            let number = parseFloat(angka);
+            let reverse = number.toString().split('').reverse().join('');
+            let ribuan = reverse.match(/\d{1,3}/g);
+            let result = ribuan.join('.').split('').reverse().join('');
+            return 'Rp ' + result;
+        }
+        
+        function formatExcelDate(excelDate) {
+            if (typeof excelDate === 'number' && excelDate > 0) {
+                try {
+                    const date = new Date(Math.round((excelDate - 25569) * 86400 * 1000));
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const year = date.getFullYear();
+                    return `${day}-${month}-${year}`;
+                } catch (e) {
+                    return excelDate;
+                }
+            } else if (typeof excelDate === 'string') {
+                // Coba parse berbagai format tanggal
+                if (excelDate.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                    return excelDate;
+                } else if (excelDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    const [year, month, day] = excelDate.split('-');
+                    return `${day}-${month}-${year}`;
+                } else if (excelDate.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                    const [month, day, year] = excelDate.split('/');
+                    return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
+                }
+            }
+            return excelDate || '-';
+        }
+        
+        // ============================
+        // FUNGSI OAuth2 & GOOGLE AUTH
+        // ============================
+        
+        function initializeGoogleAuth() {
+            const savedToken = localStorage.getItem('gdrive_token');
+            const tokenExpiry = localStorage.getItem('gdrive_token_expiry');
+            
+            if (savedToken && tokenExpiry && Date.now() < parseInt(tokenExpiry)) {
+                gdriveAuthToken = savedToken;
+                updateAuthUI();
+                console.log('Token ditemukan di localStorage');
+            } else {
+                localStorage.removeItem('gdrive_token');
+                localStorage.removeItem('gdrive_token_expiry');
+                gdriveAuthToken = null;
+                updateAuthUI();
+            }
+        }
+        
+        function updateAuthUI() {
+            const authBtn = document.getElementById('authGdriveBtn');
+            const selectFolderBtn = document.getElementById('selectFolderBtn');
+            
+            if (gdriveAuthToken) {
+                authBtn.innerHTML = '✅ Sudah Login';
+                authBtn.style.background = 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)';
+                authBtn.onclick = () => {
+                    if (confirm('Apakah Anda ingin logout dari Google?')) {
+                        logoutGoogle();
+                    }
+                };
+                selectFolderBtn.style.display = 'inline-block';
+                
+                if (gdriveFolder) {
+                    document.getElementById('uploadGdriveBtn').disabled = false;
+                }
+            } else {
+                authBtn.innerHTML = '🔑 Login Google';
+                authBtn.style.background = 'linear-gradient(135deg, #ea4335 0%, #c5221f 100%)';
+                authBtn.onclick = authorizeGoogleDrive;
+                selectFolderBtn.style.display = 'none';
+            }
+        }
+        
+        function authorizeGoogleDrive() {
+            if (typeof google === 'undefined') {
+                showAlert('❌ Google API belum dimuat. Refresh halaman.', 'error');
+                return;
+            }
+            
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SCOPES,
+                callback: (response) => {
+                    if (response.error) {
+                        showAlert('❌ Login gagal: ' + response.error, 'error');
+                        return;
+                    }
+                    
+                    gdriveAuthToken = response.access_token;
+                    
+                    // Simpan token di localStorage (expiry 55 menit)
+                    const expiryTime = Date.now() + (55 * 60 * 1000);
+                    localStorage.setItem('gdrive_token', gdriveAuthToken);
+                    localStorage.setItem('gdrive_token_expiry', expiryTime.toString());
+                    
+                    showAlert('✅ Berhasil login dengan Google!', 'success');
+                    updateAuthUI();
+                    
+                    // Auto logout setelah 50 menit
+                    setTimeout(() => {
+                        showAlert('⚠️ Session akan berakhir, harap login ulang', 'warning');
+                    }, 50 * 60 * 1000);
+                },
+            });
+            client.requestAccessToken();
+        }
+        
+        function logoutGoogle() {
+            if (gdriveAuthToken) {
+                google.accounts.oauth2.revoke(gdriveAuthToken, () => {
+                    console.log('Token revoked');
+                });
+            }
+            
+            gdriveAuthToken = null;
+            gdriveFolder = null;
+            localStorage.removeItem('gdrive_token');
+            localStorage.removeItem('gdrive_token_expiry');
+            
+            document.getElementById('selectedFolderInfo').style.display = 'none';
+            document.getElementById('uploadGdriveBtn').style.display = 'none';
+            
+            showAlert('✅ Berhasil logout', 'success');
+            updateAuthUI();
+        }
+        
+        // ============================
+        // FUNGSI GOOGLE SHEETS
+        // ============================
+        
+        function extractSpreadsheetId(input) {
+            if (!input) return null;
+            
+            input = input.trim();
+            
+            // Jika sudah berupa ID langsung
+            if (input.match(/^[a-zA-Z0-9-_]+$/) && input.length > 20) {
+                return input;
+            }
+            
+            // Pattern untuk extract dari URL
+            const patterns = [
+                /\/d\/([a-zA-Z0-9-_]+)/,
+                /id=([a-zA-Z0-9-_]+)/,
+                /key=([a-zA-Z0-9-_]+)/,
+                /spreadsheets\/d\/([a-zA-Z0-9-_]+)/
+            ];
+            
+            for (const pattern of patterns) {
+                const match = input.match(pattern);
+                if (match && match[1]) {
+                    return match[1];
+                }
+            }
+            
+            return null;
+        }
+        
+        async function processSheetUrl() {
+            // Cek login terlebih dahulu
+            if (!gdriveAuthToken) {
+                showAlert('❌ Harap login dengan Google terlebih dahulu', 'error');
+                authorizeGoogleDrive();
+                return;
+            }
+            
+            const input = sheetUrlInput.value.trim();
+            
+            if (!input) {
+                showAlert('❌ Masukkan URL atau ID Google Sheet terlebih dahulu', 'error');
+                return;
+            }
+            
+            const spreadsheetId = extractSpreadsheetId(input);
+            
+            if (!spreadsheetId) {
+                showAlert('❌ Format ID/URL tidak valid. Contoh: https://docs.google.com/spreadsheets/d/ID_ANDA/edit', 'error');
+                return;
+            }
+            
+            console.log('📊 Spreadsheet ID:', spreadsheetId);
+            
+            try {
+                // Reset state
+                allLinks = [];
+                document.getElementById('copyAllLinksBtn').style.display = 'none';
+                document.getElementById('resultList').innerHTML = '';
+                document.getElementById('stats').style.display = 'none';
+                
+                // Tampilkan loading
+                document.getElementById('loadingIndicator').classList.add('active');
+                showAlert('⏳ Mengambil data dari Google Sheets...', 'success');
+                
+                // Fetch data dari Google Sheets API
+                const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true`;
+                
+                const response = await fetch(apiUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${gdriveAuthToken}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        showAlert('❌ Akses ditolak. Pastikan Google Sheet dibagikan dengan "Anyone with the link"', 'error');
+                        document.getElementById('loadingIndicator').classList.remove('active');
+                        return;
+                    }
+                    if (response.status === 404) {
+                        showAlert('❌ Google Sheet tidak ditemukan. Periksa ID/URL Anda', 'error');
+                        document.getElementById('loadingIndicator').classList.remove('active');
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const spreadsheetData = await response.json();
+                console.log('Google Sheets Data:', spreadsheetData);
+                
+                document.getElementById('loadingIndicator').classList.remove('active');
+                
+                const workbook = convertGoogleSheetsToWorkbook(spreadsheetData);
+                window.currentWorkbook = workbook;
+                
+                if (workbook.SheetNames.length > 1) {
+                    showSheetSelector(workbook.SheetNames);
+                    showAlert(`📊 Ditemukan ${workbook.SheetNames.length} sheets. Silakan pilih sheet yang ingin diproses.`, 'success');
+                } else {
+                    processExcel(workbook, 0);
+                }
+                
+            } catch (error) {
+                console.error('Error fetching Google Sheets:', error);
+                document.getElementById('loadingIndicator').classList.remove('active');
+                showAlert(`❌ Gagal mengambil data: ${error.message}`, 'error');
+            }
+        }
+        
+        function convertGoogleSheetsToWorkbook(spreadsheetData) {
+            const workbook = {
+                SheetNames: [],
+                Sheets: {}
+            };
+            
+            spreadsheetData.sheets.forEach((sheet) => {
+                const sheetTitle = sheet.properties.title;
+                workbook.SheetNames.push(sheetTitle);
+                
+                const gridData = sheet.data || [];
+                const rowData = [];
+                
+                if (gridData.length > 0 && gridData[0].rowData) {
+                    gridData[0].rowData.forEach((row) => {
+                        const cellArray = [];
+                        
+                        if (row.values) {
+                            row.values.forEach((cell) => {
+                                let cellValue = '';
+                                
+                                if (cell.effectiveValue) {
+                                    const valueType = Object.keys(cell.effectiveValue)[0];
+                                    
+                                    switch (valueType) {
+                                        case 'stringValue':
+                                            cellValue = cell.effectiveValue.stringValue || '';
+                                            break;
+                                        case 'numberValue':
+                                            if (cell.effectiveFormat?.numberFormat?.type === 'DATE' || 
+                                                cell.effectiveFormat?.numberFormat?.type === 'DATE_TIME' ||
+                                                cell.effectiveFormat?.numberFormat?.pattern?.includes('d') || 
+                                                cell.effectiveFormat?.numberFormat?.pattern?.includes('m') ||
+                                                cell.effectiveFormat?.numberFormat?.pattern?.includes('y')) {
+                                                const googleSheetsDate = cell.effectiveValue.numberValue;
+                                                const excelSerial = googleSheetsDate + 1;
+                                                cellValue = excelSerial;
+                                            } else {
+                                                cellValue = cell.effectiveValue.numberValue || 0;
+                                            }
+                                            break;
+                                        case 'boolValue':
+                                            cellValue = cell.effectiveValue.boolValue ? 'TRUE' : 'FALSE';
+                                            break;
+                                        case 'formulaValue':
+                                            cellValue = cell.formattedValue || '';
+                                            break;
+                                        default:
+                                            cellValue = cell.formattedValue || '';
+                                    }
+                                } else if (cell.formattedValue) {
+                                    cellValue = cell.formattedValue;
+                                }
+                                
+                                cellArray.push(cellValue);
+                            });
+                        }
+                        
+                        while (cellArray.length < 8) {
+                            cellArray.push('');
+                        }
+                        
+                        rowData.push(cellArray);
+                    });
+                }
+                
+                const worksheet = {};
+                
+                rowData.forEach((row, r) => {
+                    row.forEach((cell, c) => {
+                        const cellAddress = XLSX.utils.encode_cell({r: r, c: c});
+                        
+                        let cellObject = { v: cell };
+                        
+                        if (typeof cell === 'number') {
+                            cellObject.t = 'n';
+                            if (cell > 0 && cell < 50000) {
+                                cellObject.t = 'd';
+                                cellObject.z = 'dd-mm-yyyy';
+                            }
+                        } else if (typeof cell === 'boolean') {
+                            cellObject.t = 'b';
+                        } else {
+                            cellObject.t = 's';
+                        }
+                        
+                        worksheet[cellAddress] = cellObject;
+                    });
+                });
+                
+                if (rowData.length > 0) {
+                    const range = XLSX.utils.decode_range("A1:H" + (rowData.length || 1));
+                    worksheet['!ref'] = XLSX.utils.encode_range(range);
+                } else {
+                    worksheet['!ref'] = "A1:H1";
+                }
+                
+                workbook.Sheets[sheetTitle] = worksheet;
+            });
+            
+            console.log('Converted Workbook:', workbook);
+            return workbook;
+        }
+        
+        // ============================
+        // FUNGSI UPLOAD FILE EXCEL
+        // ============================
+        
+        function handleFile(file) {
+            if (!file.name.match(/\.(xls|xlsx)$/)) {
+                showAlert('❌ Format file tidak didukung. Gunakan file .xls atau .xlsx', 'error');
+                return;
+            }
+            
+            // Reset state
+            allLinks = [];
+            generatedPDFs = [];
+            document.getElementById('copyAllLinksBtn').style.display = 'none';
+            document.getElementById('resultList').innerHTML = '';
+            document.getElementById('stats').style.display = 'none';
+            
+            showAlert('⏳ Memproses file...', 'success');
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    window.currentWorkbook = workbook;
+                    
+                    if (workbook.SheetNames.length > 1) {
+                        console.log(`📊 Found ${workbook.SheetNames.length} sheets:`, workbook.SheetNames);
+                        showSheetSelector(workbook.SheetNames);
+                        showAlert(`📊 File memiliki ${workbook.SheetNames.length} sheets. Silakan pilih sheet yang ingin diproses.`, 'success');
+                    } else {
+                        console.log('Single sheet detected, processing directly');
+                        processExcel(workbook, 0);
+                    }
+                } catch (error) {
+                    showAlert('❌ Error membaca file: ' + error.message, 'error');
+                }
+            };
+            
+            reader.onerror = function() {
+                showAlert('❌ Gagal membaca file', 'error');
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+        
+        // ============================
+        // FUNGSI PROSES EXCEL
+        // ============================
+        
+        function showSheetSelector(sheetNames) {
+            const selector = document.getElementById('sheetSelector');
+            const sheetSelect = document.getElementById('sheetSelect');
+            
+            sheetSelect.innerHTML = '<option value="">-- Pilih Sheet --</option>';
+            
+            sheetNames.forEach((name, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `📄 ${name}`;
+                sheetSelect.appendChild(option);
+            });
+            
+            selector.style.display = 'block';
+        }
+        
+        function onSheetSelected() {
+            const sheetSelect = document.getElementById('sheetSelect');
+            const selectedIndex = parseInt(sheetSelect.value);
+            
+            if (isNaN(selectedIndex) || selectedIndex < 0) {
+                return;
+            }
+            
+            console.log(`📊 User selected sheet index: ${selectedIndex} (${window.currentWorkbook.SheetNames[selectedIndex]})`);
+            
+            document.getElementById('sheetSelector').style.display = 'none';
+            
+            processExcel(window.currentWorkbook, selectedIndex);
+        }
+        
+        function processExcel(workbook, sheetIndex = 0) {
+            console.log('=== MULAI PROSES EXCEL ===');
+            console.log('Sheet names:', workbook.SheetNames);
+            console.log('Processing sheet index:', sheetIndex);
+            
+            // Hide selectors
+            document.getElementById('sheetSelector').style.display = 'none';
+            document.getElementById('loadingIndicator').classList.remove('active');
+            
+            const sheetName = workbook.SheetNames[sheetIndex];
+            const firstSheet = workbook.Sheets[sheetName];
+            console.log(`Processing sheet: "${sheetName}"`);
+            
+            // Convert to JSON
+            const jsonData2 = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+            console.log('Data rows found:', jsonData2.length);
+            
+            let jsonData = [];
+            
+            if (jsonData2.length > 0) {
+                console.log('Using array format');
+                
+                // Find data start (skip header rows)
+                let dataStart = 0;
+                for (let i = 0; i < Math.min(jsonData2.length, 10); i++) {
+                    const row = jsonData2[i];
+                    if (row && row.length >= 8 && row[0] && String(row[0]).trim() !== '') {
+                        const rowStr = row.join(' ').toLowerCase();
+                        const isHeaderRow = rowStr.includes('tgl transaksi') || rowStr.includes('merchant') || rowStr.includes('rrn');
+                        const isEmptyRow = row.every(cell => String(cell).trim() === '');
+                        
+                        if (!isHeaderRow && !isEmptyRow) {
+                            dataStart = i;
+                            break;
+                        }
+                    }
+                }
+                
+                console.log(`Starting data extraction from row ${dataStart}`);
+                let rawJsonData = jsonData2.slice(dataStart);
+                
+                // Filter empty rows
+                rawJsonData = rawJsonData.filter(row => {
+                    return row && row.length >= 8 && String(row[0]).trim() !== '';
+                });
+                
+                // Map to structured data
+                jsonData = rawJsonData.map(row => ({
+                    'TGL TRANSAKSI': row[1] || '-',
+                    'MERCHANT': row[4] || '-', 
+                    'RRN': row[5] || '-',
+                    'PARENT REFNUM': row[6] || '-',
+                    'AMOUNT TRX': row[7] || '-'
+                })).filter(item => {
+                    return item['TGL TRANSAKSI'] !== 'TGL TRANSAKSI' && 
+                           item['MERCHANT'] !== 'MERCHANT' && 
+                           item['RRN'] !== 'RRN' && 
+                           item['PARENT REFNUM'] !== 'PARENT REFNUM' && 
+                           item['AMOUNT TRX'] !== 'AMOUNT TRX' &&
+                           item['TGL TRANSAKSI'] !== '-' && 
+                           item['AMOUNT TRX'] !== '-' &&
+                           item['AMOUNT TRX'] !== '' &&
+                           item['AMOUNT TRX'] !== null &&
+                           item['AMOUNT TRX'] !== undefined;
+                });
+                
+                console.log('Processed data total rows:', jsonData.length);
+            } else {
+                console.error('❌ No data found!');
+                showAlert('❌ Tidak ada data transaksi ditemukan', 'error');
+                return;
+            }
+            
+            if (jsonData.length === 0) {
+                console.error('❌ No valid data found!');
+                showAlert('❌ Tidak ada data transaksi valid ditemukan', 'error');
+                return;
+            }
+            
+            // Reset and prepare UI
+            generatedPDFs = [];
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('resultArea').style.display = 'block';
+            document.getElementById('resultList').innerHTML = '';
+            document.getElementById('stats').style.display = 'none';
+            document.getElementById('downloadAllBtn').style.display = 'none';
+            document.getElementById('copyAllLinksBtn').style.display = 'none';
+            
+            const total = jsonData.length;
+            let processed = 0;
+            
+            // Process each row
+            jsonData.forEach((row, index) => {
+                setTimeout(() => {
+                    generatePDF(row, index);
+                    processed++;
+                    
+                    // Update progress
+                    const progress = Math.round((processed / total) * 100);
+                    const progressFill = document.getElementById('progressFill');
+                    progressFill.style.width = progress + '%';
+                    progressFill.textContent = progress + '%';
+                    
+                    // When all processed
+                    if (processed === total) {
+                        setTimeout(() => {
+                            showAlert(`✅ Berhasil generate ${total} bukti transaksi!`, 'success');
+                            updateStats();
+                            document.getElementById('downloadAllBtn').style.display = 'inline-block';
+                            document.getElementById('copyAllLinksBtn').style.display = 'inline-block';
+                        }, 500);
+                    }
+                }, index * 200); // Delay untuk menghindari blocking
+            });
+        }
+        
+        // ============================
+        // FUNGSI GENERATE PDF
+        // ============================
+        
+        function generatePDF(data, index) {
+            console.log('=== GENERATE PDF #' + (index + 1) + ' ===');
+            
+            try {
+                const tglTransaksi = data['TGL TRANSAKSI'] || '-';
+                const merchant = data['MERCHANT'] || '-';
+                const rrn = (data['RRN'] || '-').toString().replace(/'/g, '');
+                const parentRefnum = (data['PARENT REFNUM'] || '-').toString().replace(/'/g, '');
+                const amountTrx = formatRupiah(data['AMOUNT TRX'] || 0);
+                const transactionDateFormatted = formatExcelDate(tglTransaksi);
+                
+                // Data tetap untuk semua PDF
+                const identifierId = '122025';
+                const refenceIdThirdParty = '-';
+                const partnerReff = '311225';
+                const paymentGateway = 'Jatelindo Perkasa Abadi';
+                const paymentType = 'QRIS';
+                const fee = '-';
+                const revenue = amountTrx;
+                
+                // Create PDF
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: [100, 125]
+                });
+                
+                // Header
+                doc.setFillColor(41, 73, 143);
+                doc.rect(0, 0, 100, 15, 'F');
+                
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('INVOICE PAYMENT DETAIL', 50, 9, { align: 'center' });
+                
+                // Content
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(9);
+                
+                let y = 22;
+                const lineHeight = 7;
+                
+                function addRow(label, value, bgColor = null) {
+                    if (bgColor) {
+                        doc.setFillColor(bgColor.r, bgColor.g, bgColor.b);
+                        doc.rect(0, y - 5, 100, lineHeight, 'F');
+                    }
+                    
+                    doc.setFont(undefined, 'normal');
+                    doc.setFontSize(9);
+                    doc.setTextColor(50, 50, 50);
+                    doc.text(label, 5, y);
+                    
+                    doc.setFont(undefined, 'normal');
+                    doc.setFontSize(10);
+                    doc.setTextColor(0, 0, 0);
+                    
+                    const maxWidth = 50;
+                    const valueStr = String(value);
+                    const lines = doc.splitTextToSize(valueStr, maxWidth);
+                    doc.text(lines, 50, y);
+                    
+                    y += lineHeight;
+                }
+                
+                // Payment Info
+                addRow('Identifier ID', identifierId, {r: 220, g: 220, b: 220});
+                addRow('Refence ID Third Party', refenceIdThirdParty);
+                addRow('Partner Reff', partnerReff, {r: 220, g: 220, b: 220});
+                addRow('Payment Gateway', paymentGateway);
+                addRow('Payment Type', paymentType, {r: 220, g: 220, b: 220});
+                
+                // Transaction Details Header
+                y += 2;
+                doc.setFillColor(41, 73, 143);
+                doc.rect(0, y - 5, 100, 8, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(10);
+                doc.text('TRANSACTION DETAIL', 50, y, { align: 'center' });
+                y += 7;
+                
+                // Transaction Details
+                doc.setTextColor(0, 0, 0);
+                addRow('Reference ID', parentRefnum, {r: 220, g: 220, b: 220});
+                addRow('RRN / RRN QRIS', rrn);
+                addRow('Amount', amountTrx, {r: 220, g: 220, b: 220});
+                addRow('Merchant', merchant);
+                addRow('Fee', fee, {r: 220, g: 220, b: 220});
+                addRow('Revenue', revenue);
+                addRow('Transaction Date', transactionDateFormatted, {r: 220, g: 220, b: 220});
+                
+                // Footer
+                y += 4;
+                doc.setFillColor(41, 73, 143);
+                doc.rect(0, y - 5, 100, 8, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(10);
+                doc.text('TERIMA KASIH', 50, y, { align: 'center' });
+                
+                // Generate filename and save
+                const rrnClean = rrn.replace(/'/g, '').trim();
+                const filename = `EV_827_1${rrnClean || index}_1.pdf`;
+                
+                const pdfBlob = doc.output('blob');
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                
+                generatedPDFs.push({
+                    filename: filename,
+                    blob: pdfBlob,
+                    url: pdfUrl,
+                    size: (pdfBlob.size / 1024).toFixed(2)
+                });
+                
+                // Add to result list
+                const resultList = document.getElementById('resultList');
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item';
+                resultItem.innerHTML = `
+                    <div class="info">
+                        <div class="filename">${filename}</div>
+                        <div class="size">📏 ${(pdfBlob.size / 1024).toFixed(2)} KB</div>
+                    </div>
+                    <button class="download-btn" onclick="downloadPDF('${filename}', ${index})">
+                        ⬇️ Download
+                    </button>
+                `;
+                resultList.appendChild(resultItem);
+                
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                showAlert(`❌ Error pada baris ${index + 1}: ${error.message}`, 'error');
+            }
+        }
+        
+        // ============================
+        // FUNGSI DOWNLOAD
+        // ============================
+        
+        function downloadPDF(filename, index) {
+            try {
+                const pdfData = generatedPDFs[index];
+                if (!pdfData) {
+                    showAlert('❌ File tidak ditemukan', 'error');
+                    return;
+                }
+                
+                const link = document.createElement('a');
+                link.href = pdfData.url;
+                link.download = filename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showAlert(`✅ ${filename} berhasil diunduh`, 'success');
+            } catch (error) {
+                showAlert('❌ Gagal mengunduh file: ' + error.message, 'error');
+            }
+        }
+        
+        function downloadAllPDFs() {
+            if (generatedPDFs.length === 0) {
+                showAlert('❌ Tidak ada PDF yang tersedia untuk diunduh', 'error');
+                return;
+            }
+            
+            showAlert(`⏳ Memulai download ${generatedPDFs.length} file...`, 'success');
+            
+            // Download dengan delay untuk menghindari blocking browser
+            generatedPDFs.forEach((pdf, index) => {
+                setTimeout(() => {
+                    downloadPDF(pdf.filename, index);
+                }, index * 500);
+            });
+        }
+        
+        function copyAllLinks() {
+            if (generatedPDFs.length === 0) {
+                showAlert('❌ Tidak ada link yang tersedia', 'error');
+                return;
+            }
+            
+            let linksText = 'Daftar Link PDF:\n\n';
+            generatedPDFs.forEach((pdf, index) => {
+                linksText += `${index + 1}. ${pdf.filename}\n`;
+            });
+            
+            navigator.clipboard.writeText(linksText).then(() => {
+                showAlert('✅ Semua link berhasil disalin ke clipboard!', 'success');
+            }).catch(err => {
+                showAlert('❌ Gagal menyalin link: ' + err, 'error');
+            });
+        }
+        
+        // ============================
+        // FUNGSI STATISTIK
+        // ============================
+        
+        function updateStats() {
+            if (generatedPDFs.length === 0) {
+                document.getElementById('stats').style.display = 'none';
+                return;
+            }
+            
+            const totalFiles = generatedPDFs.length;
+            const totalSize = generatedPDFs.reduce((sum, pdf) => sum + parseFloat(pdf.size), 0);
+            const avgSize = totalSize / totalFiles;
+            
+            document.getElementById('totalFiles').textContent = totalFiles;
+            document.getElementById('totalSize').textContent = totalSize.toFixed(2) + ' KB';
+            document.getElementById('avgSize').textContent = avgSize.toFixed(2) + ' KB';
+            document.getElementById('successRate').textContent = '100%';
+            document.getElementById('stats').style.display = 'grid';
+        }
+        
+        // ============================
+        // FUNGSI GOOGLE DRIVE
+        // ============================
+        
+        function openFolderPicker() {
+            if (!gdriveAuthToken) {
+                showAlert('❌ Harap login terlebih dahulu', 'error');
+                authorizeGoogleDrive();
+                return;
+            }
+            
+            const folderName = prompt('Masukkan nama folder untuk menyimpan PDF:', 'Receipts_' + new Date().toISOString().split('T')[0]);
+            
+            if (folderName) {
+                createFolderInDrive(folderName);
+            }
+        }
+        
+        async function createFolderInDrive(folderName) {
+            try {
+                showAlert('⏳ Membuat folder di Google Drive...', 'success');
+                
+                const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + gdriveAuthToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: folderName,
+                        mimeType: 'application/vnd.google-apps.folder'
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || 'Gagal membuat folder');
+                }
+                
+                const folderData = await response.json();
+                gdriveFolder = folderData;
+                
+                // Update UI
+                document.getElementById('selectedFolderName').textContent = folderName;
+                document.getElementById('selectedFolderInfo').style.display = 'block';
+                document.getElementById('uploadGdriveBtn').style.display = 'inline-block';
+                document.getElementById('uploadGdriveBtn').disabled = false;
+                
+                showAlert(`✅ Folder "${folderName}" berhasil dibuat di Google Drive!`, 'success');
+            } catch (error) {
+                showAlert('❌ Gagal membuat folder: ' + error.message, 'error');
+            }
+        }
+        
+        async function uploadAllToGoogleDrive() {
+            if (!gdriveAuthToken || !gdriveFolder) {
+                showAlert('❌ Harap buat folder terlebih dahulu', 'error');
+                return;
+            }
+            
+            if (generatedPDFs.length === 0) {
+                showAlert('❌ Tidak ada PDF yang tersedia untuk diupload', 'error');
+                return;
+            }
+            
+            showAlert(`⏳ Mengupload ${generatedPDFs.length} file ke Google Drive...`, 'success');
+            
+            let uploadedCount = 0;
+            const totalFiles = generatedPDFs.length;
+            
+            for (let i = 0; i < generatedPDFs.length; i++) {
+                const pdf = generatedPDFs[i];
+                
+                try {
+                    const metadata = {
+                        name: pdf.filename,
+                        parents: [gdriveFolder.id]
+                    };
+                    
+                    const formData = new FormData();
+                    formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                    formData.append('file', pdf.blob, pdf.filename);
+                    
+                    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + gdriveAuthToken
+                        },
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        uploadedCount++;
+                        console.log(`✅ Uploaded: ${pdf.filename}`);
+                        
+                        // Update progress
+                        const progress = Math.round((uploadedCount / totalFiles) * 100);
+                        showAlert(`⏳ Upload progress: ${uploadedCount}/${totalFiles} (${progress}%)`, 'success');
+                    } else {
+                        const errorData = await response.json();
+                        console.error(`❌ Upload failed for ${pdf.filename}:`, errorData);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error uploading ${pdf.filename}:`, error);
+                }
+            }
+            
+            showAlert(`✅ ${uploadedCount}/${totalFiles} file berhasil diupload ke Google Drive!`, 'success');
+        }
+        
+        // ============================
+        // EVENT LISTENERS
+        // ============================
+        
+        // File upload events
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        // Enter key untuk Google Sheets input
+        sheetUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                processSheetUrl();
+            }
+        });
+        
+        // ============================
+        // INITIALIZE
+        // ============================
+        
+        // Initialize saat halaman dimuat
+        window.addEventListener('load', () => {
+            initializeGoogleAuth();
+            console.log('✅ Receipt Generator initialized');
+            showAlert('🟢 Sistem siap digunakan. Silakan login dengan Google untuk mulai.', 'success');
+        });
+        
+        // Expose functions to global scope
+        window.processSheetUrl = processSheetUrl;
+        window.onSheetSelected = onSheetSelected;
+        window.authorizeGoogleDrive = authorizeGoogleDrive;
+        window.openFolderPicker = openFolderPicker;
+        window.uploadAllToGoogleDrive = uploadAllToGoogleDrive;
+        window.downloadAllPDFs = downloadAllPDFs;
+        window.copyAllLinks = copyAllLinks;
+        window.downloadPDF = downloadPDF;
+    </script>
 </body>
 </html>
