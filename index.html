@@ -574,10 +574,50 @@
                 showAlert('⏳ Mengambil data dari Google Sheets...', 'success');
                 
                 // Buat API URL untuk Google Sheets (format JSON)
-                const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?key=${GOOGLE_API_KEY}&includeGridData=true`;
-                
-                // Fetch data dari Google Sheets API
-                const response = await fetch(apiUrl);
+                const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true`;
+
+                // Siapkan headers untuk request
+                const headers = {};
+                if (gdriveAuthToken) {
+                    // Gunakan auth token untuk akses private sheets (lebih cepat)
+                    headers['Authorization'] = `Bearer ${gdriveAuthToken}`;
+                } else {
+                    // Gunakan API key untuk public sheets
+                    const urlWithKey = `${apiUrl}&key=${GOOGLE_API_KEY}`;
+                    const response = await fetch(urlWithKey);
+                    // Handle response for public sheets
+                    if (!response.ok) {
+                        if (response.status === 403) {
+                            showAlert('❌ Akses ditolak. Pastikan Google Sheet dibagikan dengan "Anyone with the link" atau autentikasi terlebih dahulu', 'error');
+                            return;
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const spreadsheetData = await response.json();
+                    console.log('Google Sheets Data:', spreadsheetData);
+
+                    // Sembunyikan loading
+                    document.getElementById('loadingIndicator').classList.remove('active');
+
+                    // Konversi data Google Sheets ke format workbook XLSX
+                    const workbook = convertGoogleSheetsToWorkbook(spreadsheetData);
+
+                    // Simpan workbook untuk digunakan nanti
+                    window.currentWorkbook = workbook;
+
+                    // Tampilkan selector sheet jika ada multiple sheets
+                    if (workbook.SheetNames.length > 1) {
+                        showSheetSelector(workbook.SheetNames);
+                        showAlert(`📊 Ditemukan ${workbook.SheetNames.length} sheets. Silakan pilih sheet yang ingin diproses.`, 'success');
+                    } else {
+                        processExcel(workbook, 0);
+                    }
+
+                    return; // Exit early for public sheets
+                }
+
+                // Fetch data dari Google Sheets API dengan auth token (untuk private sheets)
+                const response = await fetch(apiUrl, { headers });
                 
                 if (!response.ok) {
                     if (response.status === 403) {
