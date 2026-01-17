@@ -32,6 +32,7 @@
             max-width: 900px;
             width: 100%;
             overflow: hidden;
+            position: relative;
         }
 
         .header {
@@ -39,6 +40,7 @@
             color: white;
             padding: 30px;
             text-align: center;
+            position: relative;
         }
 
         .header h1 {
@@ -311,6 +313,56 @@
             margin-bottom: 5px;
         }
 
+        /* Logout button in header */
+        #logoutBtn {
+            background: linear-gradient(135deg,#ff5252 0%, #c5221f 100%);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 50px;
+            font-size: 13px;
+            cursor: pointer;
+            display: none;
+            position: absolute;
+            right: 20px;
+            top: 0px;
+        }
+
+        /* LOGIN MODAL & LOGOUT */
+        #loginModal {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.6);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 20000;
+        }
+        #loginModal .card {
+          background: #fff;
+          padding: 20px;
+          width: 360px;
+          border-radius: 12px;
+          box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+        }
+        #loginModal input[type="text"],
+        #loginModal input[type="password"]{
+          width: 100%;
+          padding: 10px 12px;
+          margin: 8px 0;
+          border-radius: 8px;
+          border: 1px solid #ccc;
+          font-size: 14px;
+        }
+        #loginModal .small {
+          font-size: 13px;
+          color: #666;
+        }
+        #loginModal .error {
+          color: #b71c1c;
+          margin-top: 8px;
+        }
+
         /* === COPYRIGHT TEXT (TANPA UBAH STRUKTUR HTML) === */
         body::before,
         body::after {
@@ -338,10 +390,27 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- LOGIN MODAL -->
+    <div id="loginModal" style="display:none;">
+      <div class="card">
+        <h3 style="margin:0 0 8px 0;">Login</h3>
+        <div class="small">Masukkan username & password</div>
+        <input id="loginUser" type="text" placeholder="Username" autocomplete="username">
+        <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password">
+        <div style="display:flex; gap:70px; margin-top:10px;">
+          <button class="btn" id="loginSubmitBtn">Masuk</button>
+          <button class="btn" type="button" onclick="document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';">Reset</button>
+        </div>
+        <div id="loginError" class="error" style="display:none;"></div>
+        <div style="margin-top:10px; font-size:12px; color:#555;">Contact Support For Reset Password.</div>
+      </div>
+    </div>
+
+    <div id="app" class="container">
         <div class="header">
             <h1>🧾 Generator Receipt</h1>
             <p>Import file Excel dan dapatkan PDF bukti transaksi secara otomatis</p>
+            <button class="btn" id="logoutBtn" onclick="handleLogout()">Logout</button>
         </div>
 
         <div class="content">
@@ -434,6 +503,129 @@
     
     <script>
         const { jsPDF } = window.jspdf;
+        // --- SIMPLE LOGIN + 15 MIN TIMEOUT SESSION ---
+        const SESSION_KEY = 'jtl_session';
+        const SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 15 menit
+        // Ubah credential default di sini jika mau
+        const CREDENTIALS = { username: 'admin', password: 'admin123' };
+
+        let sessionTimerInterval = null;
+
+        function showLoginModal() {
+          const modal = document.getElementById('loginModal');
+          if (modal) modal.style.display = 'flex';
+          const app = document.getElementById('app');
+          if (app) app.style.display = 'none';
+          const logoutBtn = document.getElementById('logoutBtn');
+          if (logoutBtn) logoutBtn.style.display = 'none';
+        }
+
+        function hideLoginModal() {
+          const modal = document.getElementById('loginModal');
+          if (modal) modal.style.display = 'none';
+          const app = document.getElementById('app');
+          if (app) app.style.display = 'block';
+          const logoutBtn = document.getElementById('logoutBtn');
+          if (logoutBtn) logoutBtn.style.display = 'inline-block';
+        }
+
+        function setSession(username) {
+          const expiry = Date.now() + SESSION_TIMEOUT_MS;
+          localStorage.setItem(SESSION_KEY, JSON.stringify({ username, expiry }));
+          startSessionTimer();
+        }
+
+        function clearSession() {
+          localStorage.removeItem(SESSION_KEY);
+          stopSessionTimer();
+        }
+
+        function getSession() {
+          const raw = localStorage.getItem(SESSION_KEY);
+          if (!raw) return null;
+          try { return JSON.parse(raw); } catch(e){ return null; }
+        }
+
+        function isSessionValid() {
+          const s = getSession();
+          return s && s.expiry && Date.now() < s.expiry;
+        }
+
+        function startSessionTimer() {
+          stopSessionTimer();
+          sessionTimerInterval = setInterval(() => {
+            const s = getSession();
+            if (!s || Date.now() >= s.expiry) {
+              clearSession();
+              showAlert('⚠️ Sesi habis. Silakan login kembali.', 'error');
+              showLoginModal();
+            }
+          }, 1000);
+
+          ['click','keydown','mousemove','touchstart'].forEach(evt => {
+            window.addEventListener(evt, resetSessionActivity);
+          });
+        }
+
+        function stopSessionTimer() {
+          if (sessionTimerInterval) {
+            clearInterval(sessionTimerInterval);
+            sessionTimerInterval = null;
+          }
+          ['click','keydown','mousemove','touchstart'].forEach(evt => {
+            window.removeEventListener(evt, resetSessionActivity);
+          });
+        }
+
+        function resetSessionActivity() {
+          const s = getSession();
+          if (!s) return;
+          s.expiry = Date.now() + SESSION_TIMEOUT_MS;
+          localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+        }
+
+        function handleLogout() {
+          clearSession();
+          showLoginModal();
+        }
+
+        // Wire login form
+        document.addEventListener('DOMContentLoaded', () => {
+          const loginBtn = document.getElementById('loginSubmitBtn');
+          const userIn = document.getElementById('loginUser');
+          const passIn = document.getElementById('loginPass');
+          const loginErr = document.getElementById('loginError');
+
+          if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+              const u = (userIn.value || '').trim();
+              const p = (passIn.value || '').trim();
+              if (!u || !p) {
+                loginErr.style.display = 'block';
+                loginErr.textContent = 'Username & password wajib diisi';
+                return;
+              }
+              if (u === CREDENTIALS.username && p === CREDENTIALS.password) {
+                loginErr.style.display = 'none';
+                setSession(u);
+                hideLoginModal();
+                showAlert('✅ Login berhasil', 'success');
+              } else {
+                loginErr.style.display = 'block';
+                loginErr.textContent = 'Username atau password salah';
+              }
+            });
+          }
+
+          // Auto-check session on load
+          if (isSessionValid()) {
+            hideLoginModal();
+            startSessionTimer();
+          } else {
+            showLoginModal();
+          }
+        });
+
         let generatedPDFs = [];
         let allLinks = [];  // Store links in order
 
@@ -487,7 +679,8 @@
 
         function showAlert(message, type) {
             const alert = document.getElementById('alert');
-            alert.textContent = message;
+            if (!alert) return;
+            alert.innerHTML = message;
             alert.className = `alert ${type} active`;
             setTimeout(() => {
                 alert.classList.remove('active');
